@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" width="360" height="120">
+  <defs>
+    <style>
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.04); opacity: 0.94; }
+      }
+      @keyframes spinGlow {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes leafWave {
+        0%, 100% { transform: rotate(0deg); }
+        50% { transform: rotate(-8deg); }
+      }
+      .logo-pulse {
+        transform-origin: 60px 60px;
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      .glow-ring {
+        transform-origin: 60px 60px;
+        animation: spinGlow 2.5s linear infinite;
+      }
+      .leaf-anim {
+        transform-origin: 55px 35px;
+        animation: leafWave 2s ease-in-out infinite;
+      }
+    </style>
+  </defs>
+
+  <!-- Outer Rotating Accent Ring -->
+  <circle cx="60" cy="60" r="46" fill="none" stroke="#1E5E3A" stroke-width="2.5" stroke-dasharray="10 14" class="glow-ring" opacity="0.6"/>
+  <circle cx="60" cy="60" r="52" fill="none" stroke="#F97316" stroke-width="1.5" stroke-dasharray="6 20" class="glow-ring" style="animation-direction: reverse; animation-duration: 3.5s;" opacity="0.45"/>
+
+  <!-- Logo Mark & Leaves -->
+  <g class="logo-pulse">
+    <!-- Leaves -->
+    <g class="leaf-anim">
+      <path d="M52 32 C45 22, 35 24, 35 30 C35 39, 50 39, 52 32 Z" fill="#1E5E3A"/>
+      <path d="M56 30 C61 20, 75 22, 73 30 C71 38, 58 40, 56 30 Z" fill="#1E5E3A"/>
+    </g>
+
+    <!-- P Symbol -->
+    <path d="M30 88 L30 48 C30 40, 40 35, 50 35 C60 35, 64 42, 64 51 C64 59, 56 62, 45 62 L42 62 L42 88 Z M42 45 L42 54 L48 54 C53 54, 55 51, 55 48 C55 45, 52 43, 47 43 Z" fill="#1E5E3A"/>
+
+    <!-- M Symbol -->
+    <path d="M48 68 L61 46 L74 68 L86 46 L86 88 L75 88 L75 64 L66 80 L56 64 L56 88 L48 88 Z" fill="#F97316"/>
+
+    <!-- Text: OGBA -->
+    <text x="110" y="55" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="38" font-weight="900" fill="#1E5E3A" letter-spacing="1">OGBA</text>
+
+    <!-- Text: MARKET -->
+    <text x="110" y="80" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="22" font-weight="800" fill="#F97316" letter-spacing="3">MARKET</text>
+
+    <!-- Text: PLACE -->
+    <text x="110" y="103" font-family="'Plus Jakarta Sans', system-ui, -apple-system, sans-serif" font-size="20" font-weight="800" fill="#EA580C" letter-spacing="4">PLACE</text>
+  </g>
+</svg>
