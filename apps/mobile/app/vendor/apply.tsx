@@ -62,7 +62,7 @@ export default function VendorApplyScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Load live communities & categories from DB
+  // Load live communities, categories & payout banks from DB
   useEffect(() => {
     async function loadDynamicOptions() {
       try {
@@ -87,6 +87,17 @@ export default function VendorApplyScreen() {
           const catNames = cats.map((c: any) => c.name);
           setCategoriesList(catNames);
           setSelectedCategory((prev) => (catNames.includes(prev) ? prev : catNames[0]));
+        }
+
+        const { data: banks } = await supabase
+          .from('payout_banks')
+          .select('name')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+
+        if (banks && banks.length > 0) {
+          const bankNames = banks.map((b: any) => b.name);
+          setSelectedBank((prev) => (bankNames.includes(prev) ? prev : bankNames[0]));
         }
       } catch (err) {
         console.warn('Could not load dynamic DB options in apply screen:', err);
@@ -189,11 +200,11 @@ export default function VendorApplyScreen() {
         await CacheStorage.remove(VENDOR_DRAFT_KEY);
 
         Alert.alert(
-          '🎉 KYC Application Approved!',
-          'Your merchant storefront has been activated. You can now add products and manage your store.',
+          '🎉 Application Submitted!',
+          'Your merchant storefront application is now under review by Ogba Marketplace Administration. Once approved, your store will be cleared to list and sell products.',
           [
             {
-              text: 'Open Vendor Portal',
+              text: 'Go to Vendor Dashboard',
               onPress: () => {
                 router.replace('/vendor/dashboard');
               },

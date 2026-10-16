@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { Vendor } from '@/types/marketplace';
 
 const VENDOR_SESSION_COOKIE = 'ogba_vendor_session';
@@ -343,6 +344,9 @@ export async function registerVendorWebAction(params: {
   businessName: string;
   marketLocation: string;
   area: string;
+  categoryId?: string;
+  categoryName?: string;
+  idNumber?: string;
   email?: string;
   bankName?: string;
   accountNumber?: string;
@@ -398,24 +402,36 @@ export async function registerVendorWebAction(params: {
     }
 
     // 2. Insert vendor record
+    const vendorInsertPayload: any = {
+      user_id: userId,
+      business_name: cleanBusiness,
+      slug: `${slug}-${Math.floor(1000 + Math.random() * 9000)}`,
+      market_location: params.marketLocation.trim(),
+      area: params.area,
+      bank_code: params.bankName?.trim() || null,
+      bank_account_number: params.accountNumber?.trim() || null,
+      bank_account_name: params.accountName?.trim() || params.fullName.trim(),
+      kyc_status: 'pending', // Pending admin review
+      is_verified: false, // Paid verification badge is FALSE until purchased
+      commission_rate_percentage: 5.0,
+      rating: 5.0,
+      review_count: 0,
+      total_sales: 0,
+    };
+
+    if (params.categoryId) {
+      vendorInsertPayload.category_id = params.categoryId;
+    }
+    if (params.categoryName) {
+      vendorInsertPayload.category_name = params.categoryName;
+    }
+    if (params.idNumber) {
+      vendorInsertPayload.kyc_id_card_url = `ID_REF:${params.idNumber.trim()}`;
+    }
+
     const { data: newVendor, error: vErr } = await supabase
       .from('vendors')
-      .insert({
-        user_id: userId,
-        business_name: cleanBusiness,
-        slug: `${slug}-${Math.floor(1000 + Math.random() * 9000)}`,
-        market_location: params.marketLocation.trim(),
-        area: params.area,
-        bank_code: params.bankName?.trim() || null,
-        bank_account_number: params.accountNumber?.trim() || null,
-        bank_account_name: params.accountName?.trim() || params.fullName.trim(),
-        kyc_status: 'unsubmitted',
-        is_verified: false,
-        commission_rate_percentage: 5.0,
-        rating: 5.0,
-        review_count: 0,
-        total_sales: 0,
-      })
+      .insert(vendorInsertPayload)
       .select()
       .single();
 
@@ -446,6 +462,7 @@ export async function registerVendorWebAction(params: {
       success: true,
       message: 'Vendor store registered successfully! Your store is pending admin approval to begin selling.',
       vendorId: newVendor.id,
+      vendorSlug: newVendor.slug,
     };
   } catch (err: any) {
     console.error('Error in registerVendorWebAction:', err);

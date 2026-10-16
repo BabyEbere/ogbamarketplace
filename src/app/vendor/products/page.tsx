@@ -32,6 +32,7 @@ import {
 import { getCategories } from '@/actions/categories';
 import { getAllBrandsAction, requestNewBrandAction } from '@/actions/brands';
 import { Category, Brand } from '@/types/marketplace';
+import { optimizeSquareProductImage } from '@/lib/image-optimizer';
 
 export default function VendorProductsPage() {
   const [profile, setProfile] = useState<VendorProfileData | null>(null);
@@ -128,8 +129,10 @@ export default function VendorProductsPage() {
     setUploadError(null);
 
     try {
+      const optimized = await optimizeSquareProductImage(file, 800);
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', optimized.file);
       formData.append('folder', 'products');
 
       const res = await fetch('/api/upload/r2', {
@@ -144,7 +147,7 @@ export default function VendorProductsPage() {
         setUploadError(data.error || 'Failed to upload image. Please try again.');
       }
     } catch (err: any) {
-      setUploadError(err.message || 'Image upload failed.');
+      setUploadError(err.message || 'Image optimization or upload failed.');
     } finally {
       setIsUploadingImage(false);
     }

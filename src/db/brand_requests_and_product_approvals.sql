@@ -67,3 +67,11 @@ CREATE POLICY "Allow update on products" ON public.products FOR UPDATE USING (tr
 DROP POLICY IF EXISTS "Allow delete on products" ON public.products;
 CREATE POLICY "Allow delete on products" ON public.products FOR DELETE USING (true);
 
+-- 5. VENDORS TABLE CATEGORY EXTENSION
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL;
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS category_name VARCHAR(100);
+
+-- 6. PRODUCTS TABLE BRAND FOREIGN KEY & COLUMN
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS brand_id UUID REFERENCES public.brands(id) ON DELETE SET NULL;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS brand_name VARCHAR(150);
+

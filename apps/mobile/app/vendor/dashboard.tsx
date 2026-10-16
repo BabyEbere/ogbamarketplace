@@ -278,14 +278,37 @@ export default function VendorDashboardScreen() {
         </View>
 
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Store Rating</Text>
+          <Text style={styles.metricLabel}>Store Status</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-            <Ionicons name="star" size={14} color="#F59E0B" />
-            <Text style={styles.metricValue}>{vendor?.rating || 5.0}</Text>
+            <Ionicons
+              name={vendor?.kycStatus === 'verified' ? 'checkmark-circle' : 'time-outline'}
+              size={14}
+              color={vendor?.kycStatus === 'verified' ? ForestGreen : '#D97706'}
+            />
+            <Text style={[styles.metricValue, { fontSize: 11 }]}>
+              {vendor?.kycStatus === 'verified' ? 'Approved' : 'Pending'}
+            </Text>
           </View>
-          <Text style={styles.metricSub}>KYC Verified</Text>
+          <Text style={styles.metricSub}>
+            {vendor?.isVerified ? '★ Paid Verified' : 'Admin Review'}
+          </Text>
         </View>
       </View>
+
+      {/* Pending Approval Notice if not verified yet */}
+      {vendor?.kycStatus !== 'verified' && (
+        <View style={{ marginHorizontal: 16, marginTop: 10, padding: 12, backgroundColor: '#FEF3C7', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Ionicons name="time-outline" size={22} color="#B45309" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E', fontFamily: AppFont }}>
+              Store Approval Pending Admin Clearance
+            </Text>
+            <Text style={{ fontSize: 10, color: '#B45309', marginTop: 2, fontFamily: AppFont }}>
+              Your storefront registration is under admin review. Once approved, your products will be published to marketplace buyers.
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Navigation Tabs */}
       <View style={styles.tabBar}>
@@ -431,6 +454,11 @@ export default function VendorDashboardScreen() {
             <View style={styles.profileRow}>
               <Text style={styles.profileLabel}>Location:</Text>
               <Text style={styles.profileVal}>{vendor?.marketLocation}</Text>
+            </View>
+
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Community Zone:</Text>
+              <Text style={styles.profileVal}>{vendor?.area || 'Omoku'}</Text>
             </View>
 
             <View style={styles.profileRow}>

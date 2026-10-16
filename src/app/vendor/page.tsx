@@ -93,12 +93,11 @@ export default function VendorOverviewPage() {
                 </p>
               </div>
             </div>
-            <Link
-              href="/control-omp/vendors"
-              className="text-xs font-bold text-amber-900 underline shrink-0 hover:text-amber-950"
-            >
-              Control Center →
-            </Link>
+            <div className="shrink-0">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-200/70 text-amber-900 border border-amber-300">
+                Awaiting Admin Clearance
+              </span>
+            </div>
           </div>
         )}
 

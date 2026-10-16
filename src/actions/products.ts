@@ -58,10 +58,49 @@ export async function getProducts(options?: {
       query = query.eq('is_deal_of_day', true);
     }
 
-    const { data, error } = await query;
+    const { data: rawData, error } = await query;
+    let data: any[] | null = rawData;
 
-    if (error || !data || data.length === 0) {
-      if (error) console.error('Supabase query error in getProducts:', error);
+    // Resilient fallback: if query failed due to brands table or foreign key relationship PGRST200
+    if (error) {
+      console.warn('Initial rich getProducts query failed, falling back to core query:', error.message);
+      let fallbackQuery = supabase.from('products').select(`
+        id,
+        vendor_id,
+        brand_id,
+        brand_name,
+        title,
+        slug,
+        description,
+        price,
+        compare_at_price,
+        stock_quantity,
+        unit,
+        is_deal_of_day,
+        is_fresh_produce,
+        images,
+        approval_status,
+        is_active,
+        vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
+        category:categories(id, name, slug)
+      `);
+
+      if (!options?.includeInactive) {
+        fallbackQuery = fallbackQuery.eq('is_active', true);
+      }
+      if (options?.isDealOfDay) {
+        fallbackQuery = fallbackQuery.eq('is_deal_of_day', true);
+      }
+
+      const fbResult = await fallbackQuery;
+      if (fbResult.error) {
+        console.error('Fallback products query failed:', fbResult.error);
+        return [];
+      }
+      data = fbResult.data;
+    }
+
+    if (!data || data.length === 0) {
       return [];
     }
 
@@ -440,24 +479,30 @@ export async function deleteProductAction(id: string): Promise<{ success: boolea
   try {
     const supabase = await createClient();
 
-    // 1. Attempt hard deletion first
-    const { error: hardDeleteErr } = await supabase.from('products').delete().eq('id', id);
+    // 1. Attempt hard deletion first, checking affected rows
+    const { data: deletedRows, error: hardDeleteErr } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id)
+      .select('id');
 
-    if (hardDeleteErr) {
-      console.warn('Hard delete on products failed (likely foreign key constraint); falling back to soft archive:', hardDeleteErr.message);
+    // 2. If hard delete failed or 0 rows deleted (due to RLS or FK constraint), perform permanent soft archive
+    if (hardDeleteErr || !deletedRows || deletedRows.length === 0) {
+      console.warn('Hard delete did not affect rows; performing permanent soft archive:', hardDeleteErr?.message);
 
-      // 2. If blocked by foreign key (e.g. order_items), soft archive so it never comes back
       const { error: softDeleteErr } = await supabase
         .from('products')
         .update({
           is_active: false,
           approval_status: 'declined',
-          rejection_reason: 'Deleted by merchant / admin',
+          stock_quantity: 0,
+          rejection_reason: 'Permanently deleted by merchant / admin',
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);
 
       if (softDeleteErr) {
+        console.error('Soft delete update failed:', softDeleteErr.message);
         return { success: false, error: softDeleteErr.message };
       }
     }
@@ -586,6 +631,10 @@ export async function createProductAdminAction(params: {
       return { success: false, error: 'A merchant vendor must exist in the marketplace to create a product.' };
     }
 
+    if (!params.images || params.images.length === 0 || !params.images[0].trim()) {
+      return { success: false, error: 'A square product image is mandatory. Please upload a photo.' };
+    }
+
     const { error } = await supabase.from('products').insert({
       title,
       slug,
@@ -597,7 +646,7 @@ export async function createProductAdminAction(params: {
       stock_quantity: params.stock,
       unit: params.unit || 'Piece',
       description: params.description || '',
-      images: params.images && params.images.length > 0 ? params.images : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=600&q=80'],
+      images: params.images,
       is_deal_of_day: params.isDealOfDay || false,
     });
 

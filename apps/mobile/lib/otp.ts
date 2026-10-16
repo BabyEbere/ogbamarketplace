@@ -187,9 +187,7 @@ export async function sendOtpSms({ phoneNumber, email, name }: SendOtpParams): P
   // If Brevo SMS has no addon credits and no email provided, notify clearly with code
   return {
     success: true,
-    message: brevoSmsNoCredits
-      ? 'Brevo SMS requires SMS credits package on Brevo. (Tap below to auto-fill)'
-      : `Verification code generated for ${phoneNumber ? `+${key}` : key}`,
+    message: `Verification code generated for ${phoneNumber ? `+${normalizedPhone}` : key}`,
     otpCode,
     isGatewayPending: true,
     expiresAt,

@@ -435,6 +435,11 @@ const styles = StyleSheet.create({
     color: ForestGreen,
     fontWeight: '700',
   },
+  statsDot: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginHorizontal: 3,
+  },
   trustBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

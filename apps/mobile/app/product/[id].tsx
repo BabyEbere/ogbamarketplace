@@ -108,27 +108,28 @@ export default function ProductDescriptionScreen() {
             ? await query.or(`id.eq.${id},slug.eq.${id}`).maybeSingle()
             : await query.eq('slug', id).maybeSingle();
 
-          if (!error && data) {
+          const item = data as any;
+          if (!error && item) {
             prodData = {
-              id: data.id,
-              title: data.title,
-              description: data.description || 'Quality guaranteed item with local warranty and fast same-day delivery across Omoku, Egi & Obrikom.',
-              price: Number(data.price),
-              compareAtPrice: data.compare_at_price ? Number(data.compare_at_price) : undefined,
-              images: data.images && data.images.length > 0 ? data.images : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=800&q=80'],
-              stock: data.stock_quantity ?? 15,
+              id: item.id,
+              title: item.title,
+              description: item.description || 'Quality guaranteed item with local warranty and fast same-day delivery across Omoku, Egi & Obrikom.',
+              price: Number(item.price),
+              compareAtPrice: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+              images: item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=800&q=80'],
+              stock: item.stock_quantity ?? 15,
               unit: 'Piece',
               rating: 4.9,
               reviewCount: 28,
-              vendorId: data.vendor_id,
-              vendorName: data.vendor?.business_name || 'Verified Ogba Merchant',
-              vendorLocation: data.vendor?.market_location || 'Omoku Central Market',
-              vendorVerified: data.vendor?.is_verified ?? true,
-              vendorPhone: data.vendor?.phone || '08031234567',
-              vendorWhatsapp: data.vendor?.whatsapp || '2348031234567',
-              vendorAvatar: data.vendor?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+              vendorId: item.vendor_id,
+              vendorName: item.vendor?.business_name || 'Verified Ogba Merchant',
+              vendorLocation: item.vendor?.market_location || 'Omoku Central Market',
+              vendorVerified: item.vendor?.is_verified ?? true,
+              vendorPhone: item.vendor?.phone || '08031234567',
+              vendorWhatsapp: item.vendor?.whatsapp || '2348031234567',
+              vendorAvatar: item.vendor?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
             };
-            vendorData = data.vendor;
+            vendorData = item.vendor;
           }
         }
 

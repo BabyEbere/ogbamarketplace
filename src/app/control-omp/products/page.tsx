@@ -62,6 +62,7 @@ export default function AdminProductsPage() {
   const [brandId, setBrandId] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [isDealOfDay, setIsDealOfDay] = useState(false);
   // Image Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -143,7 +144,7 @@ export default function AdminProductsPage() {
     setCategoryId(categories[0]?.id || '');
     setBrandId('');
     setDescription('');
-    setImageUrl('https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=600&q=80');
+    setImageUrl('');
     setIsDealOfDay(false);
     setFormError(null);
     setFormSuccess(null);
@@ -210,6 +211,11 @@ export default function AdminProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !price.trim()) return;
+
+    if (!editingProduct && !imageUrl.trim()) {
+      setFormError('A square product photo is mandatory. Please upload an image.');
+      return;
+    }
 
     setSubmitting(true);
     setFormError(null);

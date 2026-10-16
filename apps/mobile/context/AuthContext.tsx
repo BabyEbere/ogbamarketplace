@@ -338,9 +338,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             bank_account_number: kycData.bankAccountNumber,
             bank_account_name: kycData.bankAccountName,
             kyc_status: 'pending',
-            is_verified: true,
+            is_verified: false, // Paid badge is false upon registration!
             rating: 5.0,
-            review_count: 1,
+            review_count: 0,
             total_sales: 0,
           },
           { onConflict: 'user_id' }
@@ -348,9 +348,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      await supabase.from('users').update({ role: 'vendor' }).eq('id', user.id);
+      // Vendor role registered, pending admin clearance to sell
+      await supabase.from('users').update({ role: 'vendor', is_active: false }).eq('id', user.id);
 
-      const updatedUser: MobileUser = { ...user, role: 'vendor' };
+      const updatedUser: MobileUser = { ...user, role: 'vendor', isActive: false };
       setUser(updatedUser);
       await CacheStorage.set(USER_SESSION_KEY, updatedUser);
 
@@ -361,10 +362,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         slug,
         marketLocation: kycData.marketLocation,
         area: kycData.area,
-        kycStatus: 'verified',
-        isVerified: true,
+        kycStatus: 'pending', // Pending admin approval to sell
+        isVerified: false, // Monetary badge requires purchase
         rating: 5.0,
-        reviewCount: 1,
+        reviewCount: 0,
         totalSales: 0,
       };
 
@@ -373,7 +374,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return {
         success: true,
-        message: 'Congratulations! Your Store Profile has been created and verified.',
+        message: 'Your store profile has been submitted for admin review and approval.',
       };
     } catch (err: any) {
       console.error('Vendor KYC submission error:', err);
