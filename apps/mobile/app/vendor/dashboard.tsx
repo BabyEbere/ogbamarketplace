@@ -19,20 +19,13 @@ import { ForestGreen, DarkForest, LightGreen, AccentGold, AppFont } from '@/cons
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-const CATEGORIES = [
-  { id: '11111111-1111-1111-1111-111111111111', name: 'Groceries & Fresh Food', slug: 'groceries-fresh-food' },
-  { id: '22222222-2222-2222-2222-222222222222', name: 'Electronics', slug: 'electronics' },
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Fashion & Clothing', slug: 'fashion-clothing' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'Home & Appliances', slug: 'home-appliances' },
-  { id: '55555555-5555-5555-5555-555555555555', name: 'Building Materials', slug: 'building-materials' },
-  { id: '77777777-7777-7777-7777-777777777777', name: 'Mama\'s Market', slug: 'mamas-market' },
-];
-
 export default function VendorDashboardScreen() {
   const { user, vendor, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'profile'>('products');
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Add Product Modal State
@@ -44,12 +37,42 @@ export default function VendorDashboardScreen() {
   const [newUnit, setNewUnit] = useState('Piece');
   const [newDescription, setNewDescription] = useState('');
   const [newImageUrl, setNewImageUrl] = useState('');
-  const [selectedCat, setSelectedCat] = useState(CATEGORIES[0]);
+  const [selectedCat, setSelectedCat] = useState<any>(null);
+
+  // Brand Options
+  const [hasBrand, setHasBrand] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+  const [reqBrandName, setReqBrandName] = useState('');
+  const [reqBrandWebsite, setReqBrandWebsite] = useState('');
+  const [reqBrandDesc, setReqBrandDesc] = useState('');
+  const [isRequestingBrand, setIsRequestingBrand] = useState(false);
+
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   useEffect(() => {
     loadVendorProducts();
+    loadCategoriesAndBrands();
   }, [vendor]);
+
+  async function loadCategoriesAndBrands() {
+    try {
+      const [catRes, brandRes] = await Promise.all([
+        supabase.from('categories').select('*').order('name'),
+        supabase.from('brands').select('*').order('name'),
+      ]);
+
+      if (catRes.data && catRes.data.length > 0) {
+        setCategories(catRes.data);
+        if (!selectedCat) setSelectedCat(catRes.data[0]);
+      }
+      if (brandRes.data) {
+        setBrands(brandRes.data);
+      }
+    } catch (err) {
+      console.warn('Error loading categories/brands in mobile:', err);
+    }
+  }
 
   async function loadVendorProducts() {
     if (!vendor) {
@@ -87,6 +110,11 @@ export default function VendorDashboardScreen() {
       return;
     }
 
+    if (!newImageUrl.trim()) {
+      Alert.alert('Mandatory Image', 'A square product image is required. Please enter or select a photo URL.');
+      return;
+    }
+
     if (!vendor) {
       Alert.alert('Error', 'Vendor profile not found.');
       return;
@@ -94,14 +122,14 @@ export default function VendorDashboardScreen() {
 
     setIsSavingProduct(true);
     try {
-      const slug = newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-      const imageUrl = newImageUrl.trim() || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80';
+      const slug = `${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString().slice(-4)}`;
 
       const { data, error } = await supabase
         .from('products')
         .insert({
           vendor_id: vendor.id,
-          category_id: selectedCat.id,
+          category_id: selectedCat?.id || (categories[0]?.id || null),
+          brand_id: hasBrand && selectedBrand ? selectedBrand.id : null,
           title: newTitle.trim(),
           slug,
           description: newDescription.trim() || `${newTitle} in stock in ${vendor.marketLocation}`,
@@ -109,17 +137,22 @@ export default function VendorDashboardScreen() {
           compare_at_price: newComparePrice ? parseFloat(newComparePrice) : null,
           stock_quantity: parseInt(newStock) || 10,
           unit: newUnit.trim() || 'Piece',
-          images: [imageUrl],
-          is_active: true,
+          images: [newImageUrl.trim()],
+          approval_status: 'pending', // Requires admin approval!
+          is_active: false, // Inactive until approved!
         })
         .select()
         .single();
 
       if (error) {
-        Alert.alert('Notice', 'Product saved locally. Re-syncing with store catalog.');
+        Alert.alert('Notice', error.message || 'Product submission error.');
+        return;
       }
 
-      Alert.alert('Success', `"${newTitle}" is now live on OGBA MARKET PLACE!`);
+      Alert.alert(
+        'Submitted for Review',
+        `"${newTitle}" was submitted to administrator for approval. It will become live on OGBA MARKET PLACE once verified!`
+      );
       setIsAddModalOpen(false);
       // Reset fields
       setNewTitle('');
@@ -127,22 +160,71 @@ export default function VendorDashboardScreen() {
       setNewComparePrice('');
       setNewDescription('');
       setNewImageUrl('');
+      setHasBrand(false);
+      setSelectedBrand(null);
       loadVendorProducts();
     } catch (e: any) {
-      Alert.alert('Error', 'Failed to publish product. Please try again.');
+      Alert.alert('Error', 'Failed to submit product for review.');
     } finally {
       setIsSavingProduct(false);
     }
   };
 
+  const handleRequestBrand = async () => {
+    if (!reqBrandName.trim()) {
+      Alert.alert('Error', 'Please enter brand name.');
+      return;
+    }
+
+    if (!vendor) return;
+
+    setIsRequestingBrand(true);
+    try {
+      const { error } = await supabase.from('brand_requests').insert({
+        vendor_id: vendor.id,
+        brand_name: reqBrandName.trim(),
+        category_id: selectedCat?.id || null,
+        website_url: reqBrandWebsite.trim() || null,
+        description: reqBrandDesc.trim() || null,
+        status: 'pending',
+      });
+
+      if (error) {
+        Alert.alert('Error', error.message || 'Failed to submit brand request.');
+      } else {
+        Alert.alert('Success', 'Brand request submitted to administrator for catalog inclusion!');
+        setReqBrandName('');
+        setReqBrandWebsite('');
+        setReqBrandDesc('');
+        setIsBrandModalOpen(false);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit request.');
+    } finally {
+      setIsRequestingBrand(false);
+    }
+  };
+
   const handleDeleteProduct = async (id: string, title: string) => {
-    Alert.alert('Delete Product', `Are you sure you want to remove "${title}" from your store?`, [
+    Alert.alert('Delete Product', `Are you sure you want to permanently remove "${title}" from your store?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await supabase.from('products').delete().eq('id', id);
+          // Attempt hard delete first
+          const { error } = await supabase.from('products').delete().eq('id', id);
+          if (error) {
+            // Soft delete so it never resurrects
+            await supabase
+              .from('products')
+              .update({
+                is_active: false,
+                approval_status: 'declined',
+                rejection_reason: 'Deleted by vendor',
+              })
+              .eq('id', id);
+          }
           setProducts((prev) => prev.filter((p) => p.id !== id));
         },
       },
@@ -153,24 +235,32 @@ export default function VendorDashboardScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={DarkForest} />
 
-      {/* Header */}
+      {/* Header with Switch to Buyer Mode */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>{vendor?.businessName || 'Vendor Portal'}</Text>
-          <Text style={styles.headerSub}>{vendor?.marketLocation || 'Omoku Main Market'}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.viewStoreBtn}
-          onPress={() => {
-            if (vendor) router.push(`/vendor/${vendor.slug || vendor.id}`);
-          }}
+        <TouchableOpacity 
+          style={styles.backBtn} 
+          onPress={() => router.replace('/(tabs)')}
         >
-          <Ionicons name="eye-outline" size={14} color="#FFFFFF" />
-          <Text style={styles.viewStoreText}>Store View</Text>
+          <Ionicons name="cart-outline" size={18} color="#FFFFFF" />
+          <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700', marginLeft: 4, fontFamily: AppFont }}>
+            Buyer Mode
+          </Text>
         </TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{vendor?.businessName || 'Vendor Portal'}</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>{vendor?.marketLocation || 'Omoku Main Market'}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <TouchableOpacity
+            style={styles.viewStoreBtn}
+            onPress={() => {
+              if (vendor) router.push(`/vendor/${vendor.slug || vendor.id}`);
+            }}
+          >
+            <Ionicons name="eye-outline" size={13} color="#FFFFFF" />
+            <Text style={styles.viewStoreText}>Preview</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Metrics Row */}
@@ -277,6 +367,26 @@ export default function VendorDashboardScreen() {
                     <Text style={styles.productRowStock}>
                       Stock Quantity: <Text style={{ fontWeight: '800', color: ForestGreen }}>{p.stock_quantity ?? 10}</Text>
                     </Text>
+
+                    {/* Moderation Status Badge */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                      {p.approval_status === 'approved' ? (
+                        <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="checkmark-circle" size={10} color="#059669" />
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#059669', fontFamily: AppFont }}>Live in Store</Text>
+                        </View>
+                      ) : p.approval_status === 'declined' ? (
+                        <View style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="alert-circle" size={10} color="#DC2626" />
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626', fontFamily: AppFont }}>Declined</Text>
+                        </View>
+                      ) : (
+                        <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="time" size={10} color="#D97706" />
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#D97706', fontFamily: AppFont }}>Pending Approval</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <TouchableOpacity
                     style={styles.deleteBtn}
@@ -373,22 +483,74 @@ export default function VendorDashboardScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Category *</Text>
+              <Text style={styles.inputLabel}>Department / Category *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
-                  {CATEGORIES.map((cat) => (
+                  {categories.map((cat) => (
                     <TouchableOpacity
                       key={cat.id}
-                      style={[styles.chip, selectedCat.id === cat.id && styles.chipActive]}
+                      style={[styles.chip, selectedCat?.id === cat.id && styles.chipActive]}
                       onPress={() => setSelectedCat(cat)}
                     >
-                      <Text style={[styles.chipText, selectedCat.id === cat.id && styles.chipTextActive]}>
+                      <Text style={[styles.chipText, selectedCat?.id === cat.id && styles.chipTextActive]}>
                         {cat.name}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </ScrollView>
+            </View>
+
+            {/* Brand Question */}
+            <View style={[styles.formGroup, { backgroundColor: '#F1F5F9', padding: 10, borderRadius: 10 }]}>
+              <Text style={[styles.inputLabel, { color: '#0F172A' }]}>Does this product have a brand?</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                <TouchableOpacity
+                  style={[styles.chip, hasBrand && styles.chipActive]}
+                  onPress={() => setHasBrand(true)}
+                >
+                  <Text style={[styles.chipText, hasBrand && styles.chipTextActive]}>Yes (Branded)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.chip, !hasBrand && styles.chipActive]}
+                  onPress={() => {
+                    setHasBrand(false);
+                    setSelectedBrand(null);
+                  }}
+                >
+                  <Text style={[styles.chipText, !hasBrand && styles.chipTextActive]}>No (Generic / Local Farm)</Text>
+                </TouchableOpacity>
+              </View>
+
+              {hasBrand && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={[styles.inputLabel, { fontSize: 10 }]}>Choose Brand:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ flexDirection: 'row', gap: 6, marginVertical: 4 }}>
+                      {brands.map((b) => (
+                        <TouchableOpacity
+                          key={b.id}
+                          style={[styles.chip, selectedBrand?.id === b.id && styles.chipActive]}
+                          onPress={() => setSelectedBrand(b)}
+                        >
+                          <Text style={[styles.chipText, selectedBrand?.id === b.id && styles.chipTextActive]}>
+                            {b.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity
+                        style={[styles.chip, { backgroundColor: LightGreen, borderColor: ForestGreen }]}
+                        onPress={() => setIsBrandModalOpen(true)}
+                      >
+                        <Text style={[styles.chipText, { color: ForestGreen, fontWeight: '800' }]}>
+                          + Request Brand
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -442,8 +604,9 @@ export default function VendorDashboardScreen() {
               </View>
             </View>
 
+            {/* Mandatory Square Image */}
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Image URL (Optional)</Text>
+              <Text style={styles.inputLabel}>Product Photo URL (Mandatory Square 1:1) *</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="https://..."
@@ -451,13 +614,53 @@ export default function VendorDashboardScreen() {
                 value={newImageUrl}
                 onChangeText={setNewImageUrl}
               />
+
+              {/* Square Preview */}
+              {newImageUrl.trim().length > 0 && (
+                <View style={{ marginTop: 8, alignItems: 'center' }}>
+                  <Image
+                    source={{ uri: newImageUrl.trim() }}
+                    style={{ width: 100, height: 100, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E1' }}
+                  />
+                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 3, fontFamily: AppFont }}>
+                    Square Preview (1:1 Aspect Ratio)
+                  </Text>
+                </View>
+              )}
+
+              {/* Quick Preset Photos */}
+              <View style={{ marginTop: 6 }}>
+                <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', marginBottom: 4, fontFamily: AppFont }}>
+                  Or pick quick preset:
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {[
+                      { label: 'Palm Oil', url: 'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?auto=format&fit=crop&w=600&q=80' },
+                      { label: 'Cooked Meal', url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80' },
+                      { label: 'Electronics', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80' },
+                      { label: 'Farm Tubers', url: 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?auto=format&fit=crop&w=600&q=80' },
+                    ].map((preset) => (
+                      <TouchableOpacity
+                        key={preset.label}
+                        style={[styles.chip, newImageUrl === preset.url && styles.chipActive]}
+                        onPress={() => setNewImageUrl(preset.url)}
+                      >
+                        <Text style={[styles.chipText, newImageUrl === preset.url && styles.chipTextActive]}>
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.inputLabel}>Product Description</Text>
+              <Text style={styles.inputLabel}>Product Description *</Text>
               <TextInput
-                style={[styles.textInput, { height: 80, textAlignVertical: 'top' }]}
-                placeholder="Authentic local produce from verified Omoku/Egi farm..."
+                style={[styles.textInput, { height: 70, textAlignVertical: 'top' }]}
+                placeholder="Describe freshness, origin, packaging, and delivery guidelines..."
                 placeholderTextColor="#94A3B8"
                 multiline
                 value={newDescription}
@@ -473,7 +676,74 @@ export default function VendorDashboardScreen() {
               {isSavingProduct ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.submitButtonText}>Publish to Ogba Marketplace</Text>
+                <Text style={styles.submitButtonText}>Submit Product for Admin Review</Text>
+              )}
+            </TouchableOpacity>
+            <Text style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 6, fontFamily: AppFont }}>
+              Admin will review and approve item before appearing in market.
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Brand Request Modal */}
+      <Modal visible={isBrandModalOpen} animationType="slide" transparent={false}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => setIsBrandModalOpen(false)}>
+              <Ionicons name="close" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Request New Brand Addition</Text>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Text style={{ fontSize: 12, color: '#475569', marginBottom: 14, fontFamily: AppFont, lineHeight: 16 }}>
+              Can't find your product's official brand in the directory? Submit a brand request. Administrators will review and add it.
+            </Text>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Brand Official Name *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. Dangote, Nestlé, Sony, Samsung"
+                placeholderTextColor="#94A3B8"
+                value={reqBrandName}
+                onChangeText={setReqBrandName}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Brand Website (Optional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="https://..."
+                placeholderTextColor="#94A3B8"
+                value={reqBrandWebsite}
+                onChangeText={setReqBrandWebsite}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Description / Notes (Optional)</Text>
+              <TextInput
+                style={[styles.textInput, { height: 70, textAlignVertical: 'top' }]}
+                placeholder="What kinds of products does this brand manufacture?"
+                placeholderTextColor="#94A3B8"
+                multiline
+                value={reqBrandDesc}
+                onChangeText={setReqBrandDesc}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitButton, isRequestingBrand && { opacity: 0.7 }]}
+              onPress={handleRequestBrand}
+              disabled={isRequestingBrand}
+            >
+              {isRequestingBrand ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Brand Request to Admin</Text>
               )}
             </TouchableOpacity>
           </ScrollView>
@@ -497,7 +767,12 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     marginRight: 10,
-    padding: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
     color: '#FFFFFF',

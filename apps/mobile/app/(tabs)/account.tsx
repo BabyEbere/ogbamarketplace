@@ -88,23 +88,57 @@ export default function AccountScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Mode Switcher Banner: Buyer <-> Vendor Mode */}
+        <View style={styles.modeSwitcherBar}>
+          <View style={styles.modeSwitcherLeft}>
+            <View style={styles.modeIndicatorDot} />
+            <Text style={styles.modeSwitcherText}>Mode: Buyer (Shopper)</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.switchModeBtn}
+            onPress={() => {
+              if (user?.role === 'vendor' || vendor) {
+                router.push('/vendor/dashboard');
+              } else {
+                handleVendorAction();
+              }
+            }}
+          >
+            <Ionicons name="storefront" size={13} color="#FFFFFF" />
+            <Text style={styles.switchModeBtnText}>Switch to Vendor Mode</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Vendor Banner CTA */}
         {user?.role === 'vendor' || vendor ? (
-          <TouchableOpacity style={styles.vendorBannerActive} onPress={() => router.push('/vendor/dashboard')}>
-            <View style={styles.vendorBannerIconBox}>
-              <Ionicons name="storefront" size={24} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={styles.vendorBannerTitle}>{vendor?.businessName || 'My Vendor Store'}</Text>
-                <Ionicons name="checkmark-circle" size={14} color="#34D399" />
+          <View style={{ marginBottom: 14 }}>
+            <TouchableOpacity style={styles.vendorBannerActive} onPress={() => router.push('/vendor/dashboard')}>
+              <View style={styles.vendorBannerIconBox}>
+                <Ionicons name="storefront" size={24} color="#FFFFFF" />
               </View>
-              <Text style={styles.vendorBannerSub}>
-                Manage products, inventory & incoming Paystack escrow orders.
-              </Text>
-            </View>
-            <Ionicons name="arrow-forward-circle" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.vendorBannerTitle}>{vendor?.businessName || 'My Vendor Store'}</Text>
+                  {vendor?.isVerified && (
+                    <Ionicons name="checkmark-circle" size={14} color="#34D399" />
+                  )}
+                </View>
+                <Text style={styles.vendorBannerSub}>
+                  Open Mobile Vendor Dashboard: catalog, orders & settlements.
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward-circle" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.webPortalBtn}
+              onPress={() => Linking.openURL('https://ogbamarketplace.com.ng/vendor')}
+            >
+              <Ionicons name="globe-outline" size={16} color={ForestGreen} />
+              <Text style={styles.webPortalBtnText}>Open Web Vendor Portal (Live Dashboard)</Text>
+              <Ionicons name="open-outline" size={14} color="#64748B" />
+            </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity style={styles.vendorBannerCta} onPress={handleVendorAction}>
             <View style={styles.vendorCtaIconBox}>
@@ -113,7 +147,7 @@ export default function AccountScreen() {
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.vendorCtaTitle}>Become a Verified Vendor (KYC)</Text>
               <Text style={styles.vendorCtaSub}>
-                Sell farm produce, palm oil, electronics or clothes across Omoku & Egi.
+                Sell goods across Omoku & Egi with automated Paystack settlements.
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
@@ -406,6 +440,69 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#CBD5E1',
     marginTop: 2,
+    fontFamily: AppFont,
+  },
+  modeSwitcherBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modeSwitcherLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modeIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ForestGreen,
+  },
+  modeSwitcherText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    fontFamily: AppFont,
+  },
+  switchModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: ForestGreen,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  switchModeBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    fontFamily: AppFont,
+  },
+  webPortalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  webPortalBtnText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: ForestGreen,
     fontFamily: AppFont,
   },
 });

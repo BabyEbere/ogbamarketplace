@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { ForestGreen, DarkForest, LightGreen, AccentGold, AppFont } from '@/constants/Colors';
 import { useAuth } from '@/context/AuthContext';
 import { CacheStorage } from '@/lib/cache';
+import { supabase } from '@/lib/supabase';
 
 const VENDOR_DRAFT_KEY = 'vendor_kyc_apply_draft';
 
@@ -35,7 +36,7 @@ const NIGERIAN_BANKS = [
   'Stanbic IBTC Bank',
 ];
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Groceries & Farm Produce',
   'Palm Oil & Agro Mills',
   'Electronics, Solar & Gadgets',
@@ -49,8 +50,10 @@ export default function VendorApplyScreen() {
 
   const [businessName, setBusinessName] = useState('');
   const [marketLocation, setMarketLocation] = useState('');
-  const [selectedArea, setSelectedArea] = useState<'Omoku' | 'Egi' | 'Obrikom' | 'Erema'>('Omoku');
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
+  const [selectedArea, setSelectedArea] = useState('Omoku');
+  const [communitiesList, setCommunitiesList] = useState<string[]>(['Omoku', 'Egi', 'Obrikom', 'Erema']);
+  const [categoriesList, setCategoriesList] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [selectedCategory, setSelectedCategory] = useState(DEFAULT_CATEGORIES[0]);
   const [selectedBank, setSelectedBank] = useState(NIGERIAN_BANKS[0]);
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
@@ -58,6 +61,39 @@ export default function VendorApplyScreen() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Load live communities & categories from DB
+  useEffect(() => {
+    async function loadDynamicOptions() {
+      try {
+        const { data: comms } = await supabase
+          .from('communities')
+          .select('name')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+
+        if (comms && comms.length > 0) {
+          const names = comms.map((c: any) => c.name);
+          setCommunitiesList(names);
+          setSelectedArea((prev) => (names.includes(prev) ? prev : names[0]));
+        }
+
+        const { data: cats } = await supabase
+          .from('categories')
+          .select('name')
+          .order('display_order', { ascending: true });
+
+        if (cats && cats.length > 0) {
+          const catNames = cats.map((c: any) => c.name);
+          setCategoriesList(catNames);
+          setSelectedCategory((prev) => (catNames.includes(prev) ? prev : catNames[0]));
+        }
+      } catch (err) {
+        console.warn('Could not load dynamic DB options in apply screen:', err);
+      }
+    }
+    loadDynamicOptions();
+  }, []);
 
   // Restore vendor application draft on screen mount
   useEffect(() => {
@@ -235,37 +271,41 @@ export default function VendorApplyScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Community Zone</Text>
-              <View style={styles.chipRow}>
-                {(['Omoku', 'Egi', 'Obrikom', 'Erema'] as const).map((area) => (
-                  <TouchableOpacity
-                    key={area}
-                    style={[styles.chip, selectedArea === area && styles.chipActive]}
-                    onPress={() => setSelectedArea(area)}
-                  >
-                    <Text style={[styles.chipText, selectedArea === area && styles.chipTextActive]}>
-                      {area}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={styles.inputLabel}>Community Zone (From Database)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {communitiesList.map((area) => (
+                    <TouchableOpacity
+                      key={area}
+                      style={[styles.chip, selectedArea === area && styles.chipActive]}
+                      onPress={() => setSelectedArea(area)}
+                    >
+                      <Text style={[styles.chipText, selectedArea === area && styles.chipTextActive]}>
+                        {area}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Primary Merchandise Category</Text>
-              <View style={styles.chipRow}>
-                {CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.chip, selectedCategory === cat && styles.chipActive]}
-                    onPress={() => setSelectedCategory(cat)}
-                  >
-                    <Text style={[styles.chipText, selectedCategory === cat && styles.chipTextActive]}>
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={styles.inputLabel}>Primary Merchandise Category (From Database)</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {categoriesList.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.chip, selectedCategory === cat && styles.chipActive]}
+                      onPress={() => setSelectedCategory(cat)}
+                    >
+                      <Text style={[styles.chipText, selectedCategory === cat && styles.chipTextActive]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           </View>
 

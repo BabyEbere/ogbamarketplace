@@ -49,7 +49,7 @@ import {
 } from '@/actions/settings';
 
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'admins' | 'communities' | 'brevo' | 'r2' | 'security' | 'platform'>('communities');
+  const [activeTab, setActiveTab] = useState<'admins' | 'communities' | 'brevo' | 'r2' | 'security' | 'platform' | 'badge'>('communities');
   const [adminList, setAdminList] = useState<ControlAdmin[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [currentAdminEmail, setCurrentAdminEmail] = useState('pookietechdigitals@gmail.com');
@@ -76,6 +76,19 @@ export default function AdminSettingsPage() {
   const [commissionRate, setCommissionRate] = useState('7.5');
   const [baseDeliveryFee, setBaseDeliveryFee] = useState('1000');
   const [platformSaved, setPlatformSaved] = useState(false);
+
+  // Monetary Verification Badge State (100% DB)
+  const [badgePrice, setBadgePrice] = useState('15000');
+  const [badgePeriod, setBadgePeriod] = useState('Annual (12 Months)');
+  const [badgeRequirements, setBadgeRequirements] = useState(
+    '1. Active approved vendor store in ONELGA\n2. Valid National ID (NIN) or CAC registration\n3. Minimum 5 successful deliveries with 4.5+ star rating'
+  );
+  const [badgeInstructions, setBadgeInstructions] = useState(
+    'Pay badge verification fee into Ogba Marketplace designated settlement account or Paystack badge gateway.'
+  );
+  const [badgeLoading, setBadgeLoading] = useState(false);
+  const [badgeSaved, setBadgeSaved] = useState(false);
+  const [badgeError, setBadgeError] = useState<string | null>(null);
 
   // Communities State (100% DB)
   const [communities, setCommunities] = useState<CommunityRecord[]>([]);
@@ -151,10 +164,47 @@ export default function AdminSettingsPage() {
       setR2SecretAccessKey(config.r2SecretAccessKey);
       setR2BucketName(config.r2BucketName || 'ogbamarketplace');
       setR2PublicDomain(config.r2PublicDomain || '');
+      setBadgePrice(config.verificationBadgePrice || '15000');
+      setBadgePeriod(config.verificationBadgePeriod || 'Annual (12 Months)');
+      setBadgeRequirements(
+        config.verificationBadgeRequirements ||
+          '1. Active approved vendor store in ONELGA\n2. Valid National ID (NIN) or CAC registration\n3. Minimum 5 successful deliveries with 4.5+ star rating'
+      );
+      setBadgeInstructions(
+        config.verificationBadgeInstructions ||
+          'Pay badge verification fee into Ogba Marketplace designated settlement account or Paystack badge gateway.'
+      );
     } catch (e) {
       console.error(e);
     }
   }
+
+  const handleSaveBadge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBadgeLoading(true);
+    setBadgeSaved(false);
+    setBadgeError(null);
+
+    try {
+      const res = await savePlatformSettingsAction({
+        verificationBadgePrice: badgePrice,
+        verificationBadgePeriod: badgePeriod,
+        verificationBadgeRequirements: badgeRequirements,
+        verificationBadgeInstructions: badgeInstructions,
+      });
+
+      if (res.success) {
+        setBadgeSaved(true);
+        setTimeout(() => setBadgeSaved(false), 3000);
+      } else {
+        setBadgeError(res.error || 'Failed to save badge settings.');
+      }
+    } catch (err) {
+      setBadgeError('Server error while saving badge settings.');
+    } finally {
+      setBadgeLoading(false);
+    }
+  };
 
   const handleSaveR2 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -422,6 +472,17 @@ export default function AdminSettingsPage() {
           >
             <Percent className="w-4 h-4" />
             <span>Commission & Rates</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('badge')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'badge'
+                ? 'bg-forest-850 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Verification Badge (Monetary)</span>
           </button>
         </div>
 
@@ -1054,6 +1115,128 @@ export default function AdminSettingsPage() {
             >
               Save Platform Rates to Database
             </button>
+          </div>
+        )}
+
+        {/* TAB: Monetary Verification Badge Settings (100% DB) */}
+        {activeTab === 'badge' && (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5 max-w-3xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-forest-850">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Monetary Verification Badge Configuration
+                </h3>
+              </div>
+              <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                Trust Checkmark
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              In Ogba Marketplace, <strong>Store KYC</strong> is the administrative approval that allows vendors to sell. In contrast, the <strong>Verification Badge</strong> is a premium, paid credibility trust badge (Golden/Green Checkmark) that appears next to the vendor's name on product detail pages and catalog listings.
+            </p>
+
+            {badgeSaved && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Verification Badge settings saved to database successfully!</span>
+              </div>
+            )}
+
+            {badgeError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{badgeError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBadge} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Badge Price (₦)
+                  </label>
+                  <input
+                    type="number"
+                    value={badgePrice}
+                    onChange={(e) => setBadgePrice(e.target.value)}
+                    placeholder="15000"
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Subscription or activation fee vendors pay for the verified badge.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Validity Duration
+                  </label>
+                  <input
+                    type="text"
+                    value={badgePeriod}
+                    onChange={(e) => setBadgePeriod(e.target.value)}
+                    placeholder="e.g. Annual (12 Months) or One-time"
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Displayed to vendors before they pay.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Required Criteria to Earn the Badge
+                </label>
+                <textarea
+                  rows={3}
+                  value={badgeRequirements}
+                  onChange={(e) => setBadgeRequirements(e.target.value)}
+                  placeholder="e.g. 1. Active approved store in ONELGA&#10;2. Valid National ID (NIN)&#10;3. Minimum 5 successful deliveries"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Vendors must fulfill these criteria to apply for the badge.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Payment Instructions & Bank Account
+                </label>
+                <textarea
+                  rows={3}
+                  value={badgeInstructions}
+                  onChange={(e) => setBadgeInstructions(e.target.value)}
+                  placeholder="Specify corporate bank account or payment instructions for vendors..."
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={badgeLoading}
+                  className="py-2.5 px-5 bg-forest-850 hover:bg-forest-900 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {badgeLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Badge Settings to Database</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>

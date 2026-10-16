@@ -15,6 +15,11 @@ export interface PlatformConfig {
   r2SecretAccessKey: string;
   r2BucketName: string;
   r2PublicDomain: string;
+  // Monetary Verification Badge Settings
+  verificationBadgePrice: string;
+  verificationBadgePeriod: string;
+  verificationBadgeRequirements: string;
+  verificationBadgeInstructions: string;
 }
 
 /**
@@ -32,6 +37,10 @@ export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
     r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
     r2BucketName: process.env.R2_BUCKET_NAME || 'ogbamarketplace',
     r2PublicDomain: process.env.R2_PUBLIC_DOMAIN || '',
+    verificationBadgePrice: '15000',
+    verificationBadgePeriod: 'Annual (12 Months)',
+    verificationBadgeRequirements: '1. Active approved vendor store in ONELGA\n2. Valid National ID (NIN) or CAC registration\n3. Minimum 5 successful deliveries with 4.5+ star rating',
+    verificationBadgeInstructions: 'Pay badge verification fee into Ogba Marketplace designated settlement account or Paystack badge gateway.',
   };
 
   try {
@@ -50,6 +59,10 @@ export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
         if (row.key === 'r2_secret_access_key' && row.value) config.r2SecretAccessKey = row.value;
         if (row.key === 'r2_bucket_name' && row.value) config.r2BucketName = row.value;
         if (row.key === 'r2_public_domain' && row.value) config.r2PublicDomain = row.value;
+        if (row.key === 'badge_price' && row.value) config.verificationBadgePrice = row.value;
+        if (row.key === 'badge_period' && row.value) config.verificationBadgePeriod = row.value;
+        if (row.key === 'badge_requirements' && row.value) config.verificationBadgeRequirements = row.value;
+        if (row.key === 'badge_instructions' && row.value) config.verificationBadgeInstructions = row.value;
       });
     }
   } catch (err) {
@@ -73,6 +86,10 @@ export async function savePlatformSettingsAction(params: {
   r2SecretAccessKey?: string;
   r2BucketName?: string;
   r2PublicDomain?: string;
+  verificationBadgePrice?: string;
+  verificationBadgePeriod?: string;
+  verificationBadgeRequirements?: string;
+  verificationBadgeInstructions?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
@@ -108,6 +125,18 @@ export async function savePlatformSettingsAction(params: {
     }
     if (params.r2PublicDomain !== undefined) {
       rowsToUpsert.push({ key: 'r2_public_domain', value: params.r2PublicDomain.trim(), updated_at: now });
+    }
+    if (params.verificationBadgePrice !== undefined) {
+      rowsToUpsert.push({ key: 'badge_price', value: params.verificationBadgePrice.trim(), updated_at: now });
+    }
+    if (params.verificationBadgePeriod !== undefined) {
+      rowsToUpsert.push({ key: 'badge_period', value: params.verificationBadgePeriod.trim(), updated_at: now });
+    }
+    if (params.verificationBadgeRequirements !== undefined) {
+      rowsToUpsert.push({ key: 'badge_requirements', value: params.verificationBadgeRequirements.trim(), updated_at: now });
+    }
+    if (params.verificationBadgeInstructions !== undefined) {
+      rowsToUpsert.push({ key: 'badge_instructions', value: params.verificationBadgeInstructions.trim(), updated_at: now });
     }
 
     if (rowsToUpsert.length > 0) {

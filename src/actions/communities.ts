@@ -149,3 +149,31 @@ export async function deleteCommunityAction(id: string): Promise<{ success: bool
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Fetch latest community notices from DB with fallback
+ */
+export async function getCommunityNoticesAction(): Promise<{
+  id: string;
+  title: string;
+  excerpt: string;
+  category: string;
+  published_at?: string;
+}[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('community_notices')
+      .select('*')
+      .order('published_at', { ascending: false })
+      .limit(4);
+
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+    return [];
+  } catch (err) {
+    console.error('Exception fetching community notices:', err);
+    return [];
+  }
+}

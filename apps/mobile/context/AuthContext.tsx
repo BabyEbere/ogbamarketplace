@@ -42,7 +42,7 @@ interface AuthContextType {
   vendor: MobileVendor | null;
   isLoading: boolean;
   isLoggedIn: boolean;
-  loginWithIdentifier: (identifier: string) => Promise<{ success: boolean; message?: string }>;
+  loginWithIdentifier: (identifier: string) => Promise<{ success: boolean; message?: string; user?: MobileUser }>;
   registerWithDetails: (params: RegisterParams) => Promise<{ success: boolean; message?: string }>;
   loginWithOtp: (phoneNumber: string, fullName?: string, area?: string) => Promise<boolean>;
   submitVendorKyc: (kycData: {
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /**
    * Login with either Email address OR Phone number
    */
-  async function loginWithIdentifier(identifier: string): Promise<{ success: boolean; message?: string }> {
+  async function loginWithIdentifier(identifier: string): Promise<{ success: boolean; message?: string; user?: MobileUser }> {
     try {
       setIsLoading(true);
       const cleaned = identifier.trim();
@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await CacheStorage.set(USER_SESSION_KEY, targetUser);
       await fetchUserProfile(targetUser.id, targetUser.phoneNumber);
 
-      return { success: true };
+      return { success: true, user: targetUser };
     } catch (err: any) {
       console.error('Login error:', err);
       return { success: false, message: err.message || 'Login failed. Please check your connection.' };

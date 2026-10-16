@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import {
@@ -22,6 +22,7 @@ import {
   Check,
   X,
   Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Product, Category, Brand } from '@/types/marketplace';
 import {
@@ -33,6 +34,7 @@ import {
 } from '@/actions/products';
 import { getCategories } from '@/actions/categories';
 import { getAllBrandsAction } from '@/actions/brands';
+import { optimizeSquareProductImage } from '@/lib/image-optimizer';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -60,12 +62,53 @@ export default function AdminProductsPage() {
   const [brandId, setBrandId] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [isDealOfDay, setIsDealOfDay] = useState(false);
+  // Image Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageSavings, setImageSavings] = useState<number | null>(null);
 
   // Action status
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setFormError(null);
+
+    try {
+      // 1. Center-crop and compress to 1:1 square WebP
+      const optimized = await optimizeSquareProductImage(file, 600, 0.85);
+      setImageSavings(optimized.savingsPercent);
+
+      // 2. Upload to Cloudflare R2
+      const formData = new FormData();
+      formData.append('file', optimized.file);
+      formData.append('folder', 'products');
+
+      const res = await fetch('/api/upload/r2', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.url) {
+        setImageUrl(data.url);
+      } else {
+        setImageUrl(optimized.previewUrl);
+        if (data.message || data.error) {
+          setFormError(`${data.message || data.error} (Using local preview)`);
+        }
+      }
+    } catch (err: any) {
+      setFormError(err.message || 'Image upload failed.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   useEffect(() => {
     loadAllData();
@@ -75,7 +118,7 @@ export default function AdminProductsPage() {
     setLoading(true);
     try {
       const [prodData, catData, brandData] = await Promise.all([
-        getProducts(),
+        getProducts({ includeInactive: true }),
         getCategories(),
         getAllBrandsAction(),
       ]);
@@ -645,17 +688,66 @@ export default function AdminProductsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Product Image URL
-                </label>
+              {/* Mandatory Square Image Upload (1:1 Ratio) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700 uppercase">
+                    Product Photo (Square 1:1 Aspect Ratio) *
+                  </label>
+                  {imageSavings !== null && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Saved {imageSavings}% via WebP
+                    </span>
+                  )}
+                </div>
+
                 <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
                 />
+
+                <div className="flex flex-col sm:flex-row items-center gap-3.5 p-3.5 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50">
+                  {/* Square Preview */}
+                  <div className="w-24 h-24 aspect-square rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0 shadow-2xs">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt="Product preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-2 text-slate-400">
+                        <ImageIcon className="w-7 h-7 mx-auto text-slate-300" />
+                        <span className="text-[9px] font-bold block mt-1">1:1 Square</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2 text-center sm:text-left">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold shadow-2xs transition-colors inline-flex items-center gap-2"
+                    >
+                      <Upload className="w-4 h-4 text-forest-850" />
+                      <span>{uploadingImage ? 'Optimizing & Uploading...' : 'Upload Square Photo'}</span>
+                    </button>
+                    <p className="text-[11px] text-slate-500">
+                      Auto-center-crops to exact 1:1 square, converts to WebP, and stores in Cloudflare R2.
+                    </p>
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="Or enter direct image URL https://..."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-1 focus:ring-forest-800"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>

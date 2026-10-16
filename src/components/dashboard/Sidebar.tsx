@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -22,6 +22,7 @@ import {
   Wallet,
   Sparkles,
   Tag,
+  CheckCircle,
 } from 'lucide-react';
 
 import Image from 'next/image';
@@ -41,9 +42,10 @@ const adminNavItems: NavItem[] = [
   { name: 'Riders & Fleets', href: '/control-omp/riders', icon: Bike },
   { name: 'Orders Dispatch', href: '/control-omp/orders', icon: ShoppingBag, badge: 'Active' },
   { name: 'Products Catalog', href: '/control-omp/products', icon: Package },
+  { name: 'Product Approvals', href: '/control-omp/products/approvals', icon: CheckCircle, badgeColor: 'bg-amber-500' },
   { name: 'Market Categories', href: '/control-omp/categories', icon: Sparkles },
   { name: 'Brands Directory', href: '/control-omp/brands', icon: Tag, badge: 'R2' },
-  { name: 'KYC & Verifications', href: '/control-omp/kyc', icon: ShieldCheck, badge: '3 Pending', badgeColor: 'bg-amber-500' },
+  { name: 'KYC & Verifications', href: '/control-omp/kyc', icon: ShieldCheck, badgeColor: 'bg-amber-500' },
   { name: 'Payouts & Ledger', href: '/control-omp/payouts', icon: CreditCard },
   { name: 'Platform Settings', href: '/control-omp/settings', icon: Settings },
 ];
@@ -66,8 +68,27 @@ interface SidebarProps {
 export default function Sidebar({ role, userName = 'Admin Supervisor', storeName }: SidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
 
-  const navItems = role === 'admin' ? adminNavItems : vendorNavItems;
+  useEffect(() => {
+    if (role === 'admin') {
+      import('@/actions/products').then(({ getPendingProductsCountAction }) => {
+        getPendingProductsCountAction().then((count) => setPendingApprovalsCount(count));
+      });
+    }
+  }, [role, pathname]);
+
+  const navItems = role === 'admin'
+    ? adminNavItems.map((item) => {
+        if (item.href === '/control-omp/products/approvals') {
+          return {
+            ...item,
+            badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount} Pending` : undefined,
+          };
+        }
+        return item;
+      })
+    : vendorNavItems;
 
   const isActive = (href: string) => {
     if (href === '/control-omp' || href === '/vendor') {

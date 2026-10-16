@@ -250,14 +250,33 @@ export async function reviewVendorKYCAction(params: {
   try {
     const supabase = await createClient();
 
-    // Update in Supabase if table exists
-    await supabase
+    // 1. Update vendor KYC status in database
+    const { error: vErr } = await supabase
       .from('vendors')
       .update({
         kyc_status: params.status,
-        is_verified: params.status === 'verified',
       })
       .eq('id', params.vendorId);
+
+    if (vErr) {
+      console.error('Error updating vendor KYC in DB:', vErr);
+    }
+
+    // 2. If approved, also ensure user is active to sell
+    if (params.status === 'verified') {
+      const { data: vRecord } = await supabase
+        .from('vendors')
+        .select('user_id')
+        .eq('id', params.vendorId)
+        .maybeSingle();
+
+      if (vRecord?.user_id) {
+        await supabase
+          .from('users')
+          .update({ is_active: true })
+          .eq('id', vRecord.user_id);
+      }
+    }
 
     // Send automated Brevo email notification
     if (params.vendorEmail && params.vendorName && params.businessName) {
@@ -276,9 +295,39 @@ export async function reviewVendorKYCAction(params: {
     };
   } catch (err: any) {
     return {
-      success: true,
-      message: `Vendor KYC updated to ${params.status.toUpperCase()} (Simulated).`,
+      success: false,
+      message: err.message || 'Failed to update vendor KYC.',
     };
+  }
+}
+
+/**
+ * Admin toggles vendor's Paid Verification Badge (Monetary trust checkmark)
+ */
+export async function toggleVendorBadgeAction(params: {
+  vendorId: string;
+  isVerified: boolean;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('vendors')
+      .update({ is_verified: params.isVerified })
+      .eq('id', params.vendorId);
+
+    if (error) {
+      console.error('Error toggling vendor verification badge:', error);
+      return { success: false, message: error.message };
+    }
+
+    return {
+      success: true,
+      message: params.isVerified
+        ? 'Verification Badge (Checkmark) successfully granted to merchant!'
+        : 'Verification Badge revoked.',
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Failed to toggle badge.' };
   }
 }
 
@@ -340,7 +389,7 @@ export async function getAdminUsers(): Promise<AdminDirectoryUser[]> {
         directoryUsers.push({
           id: u.id,
           name: u.full_name || (vendorRecord ? vendorRecord.business_name : 'Community Shopper'),
-          email: u.email || `${u.phone_number || 'user'}@ogbamarketplace.com`,
+          email: u.email || `${u.phone_number || 'user'}@ogbamarketplace.com.ng`,
           phone: u.phone_number ? (u.phone_number.startsWith('+') ? u.phone_number : `+${u.phone_number}`) : 'No Phone',
           role,
           platform: 'Mobile App',
@@ -438,4 +487,267 @@ export async function toggleUserStatusAction(params: {
     };
   }
 }
+
+export interface AdminVendorRecord {
+  id: string;
+  userId: string;
+  name: string;
+  owner: string;
+  phone: string;
+  email: string;
+  category: string;
+  location: string;
+  productsCount: number;
+  totalRevenue: string;
+  totalSalesNum: number;
+  commissionPaid: string;
+  isApprovedToSell: boolean;
+  kycStatus: 'unsubmitted' | 'pending' | 'verified' | 'rejected';
+  isVerified: boolean;
+  rating: string;
+  kycIdCardUrl?: string | null;
+  kycBusinessProofUrl?: string | null;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  createdAt: string;
+}
+
+/**
+ * Fetch all vendors live from Supabase DB
+ */
+export async function getAdminVendorsFromDB(): Promise<AdminVendorRecord[]> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Fetch vendors
+    const { data: dbVendors, error: vErr } = await supabase
+      .from('vendors')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (vErr || !dbVendors) {
+      console.error('Error fetching vendors from Supabase:', vErr);
+      return [];
+    }
+
+    // 2. Fetch users for owner names and approval status
+    const { data: dbUsers } = await supabase.from('users').select('*');
+    const userMap: Record<string, any> = {};
+    if (dbUsers) {
+      dbUsers.forEach((u: any) => {
+        userMap[u.id] = u;
+      });
+    }
+
+    // 3. Fetch product counts per vendor
+    const { data: dbProducts } = await supabase.from('products').select('id, vendor_id');
+    const productCountMap: Record<string, number> = {};
+    if (dbProducts) {
+      dbProducts.forEach((p: any) => {
+        if (p.vendor_id) {
+          productCountMap[p.vendor_id] = (productCountMap[p.vendor_id] || 0) + 1;
+        }
+      });
+    }
+
+    return dbVendors.map((v: any) => {
+      const user = userMap[v.user_id];
+      const sales = Number(v.total_sales) || 0;
+      const commission = Math.round(sales * 0.05);
+
+      return {
+        id: v.id,
+        userId: v.user_id || '',
+        name: v.business_name || 'Store Name',
+        owner: user?.full_name || 'Store Owner',
+        phone: user?.phone_number || 'No Phone Registered',
+        email: user?.email || 'No Email',
+        category: `${v.area || 'Omoku'} Merchant`,
+        location: v.market_location || 'Omoku Central, Rivers State',
+        productsCount: productCountMap[v.id] || 0,
+        totalRevenue: `₦${sales.toLocaleString()}`,
+        totalSalesNum: sales,
+        commissionPaid: `₦${commission.toLocaleString()}`,
+        isApprovedToSell: user ? Boolean(user.is_active) : true,
+        kycStatus: v.kyc_status || 'unsubmitted',
+        isVerified: Boolean(v.is_verified),
+        rating: v.review_count ? `${Number(v.rating)} (${v.review_count} reviews)` : 'No Reviews Yet',
+        kycIdCardUrl: v.kyc_id_card_url,
+        kycBusinessProofUrl: v.kyc_business_proof_url,
+        bankName: v.bank_code || 'Not Set',
+        accountNumber: v.bank_account_number || 'Not Set',
+        accountName: v.bank_account_name || 'Not Set',
+        createdAt: v.created_at ? new Date(v.created_at).toLocaleDateString('en-GB') : 'Recent',
+      };
+    });
+  } catch (err) {
+    console.error('Error in getAdminVendorsFromDB:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin approves or suspends a vendor's ability to sell
+ */
+export async function toggleVendorApprovalToSellAction(params: {
+  vendorId: string;
+  userId: string;
+  approved: boolean;
+}) {
+  try {
+    const supabase = await createClient();
+
+    // Update users.is_active which governs selling permission
+    if (params.userId) {
+      await supabase
+        .from('users')
+        .update({ is_active: params.approved })
+        .eq('id', params.userId);
+    }
+
+    return {
+      success: true,
+      message: params.approved
+        ? 'Vendor successfully approved to sell! They can now submit KYC verification.'
+        : 'Vendor selling privileges have been suspended.',
+    };
+  } catch (err: any) {
+    console.error('Error toggling vendor approval to sell:', err);
+    return { success: false, message: err.message || 'Failed to update vendor approval.' };
+  }
+}
+
+export interface AdminPayoutRecord {
+  id: string;
+  vendorId: string;
+  userId: string;
+  recipient: string;
+  owner: string;
+  phone: string;
+  type: string;
+  amount: string;
+  rawAmount: number;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  payoutAddressFull: string;
+  hasPayoutAddress: boolean;
+  status: 'Pending Transfer' | 'Completed' | 'Awaiting Address';
+  requestedDate: string;
+}
+
+/**
+ * Fetch vendors awaiting payouts with their payout address / bank details
+ */
+export async function getAdminPayoutsFromDB(): Promise<AdminPayoutRecord[]> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Fetch vendors
+    const { data: dbVendors } = await supabase
+      .from('vendors')
+      .select('*')
+      .order('total_sales', { ascending: false });
+
+    // 2. Fetch users
+    const { data: dbUsers } = await supabase.from('users').select('*');
+    const userMap: Record<string, any> = {};
+    if (dbUsers) {
+      dbUsers.forEach((u: any) => {
+        userMap[u.id] = u;
+      });
+    }
+
+    if (!dbVendors || dbVendors.length === 0) {
+      return [];
+    }
+
+    const payoutsList: AdminPayoutRecord[] = [];
+
+    dbVendors.forEach((v: any) => {
+      const user = userMap[v.user_id];
+      const userBalance = Number(user?.wallet_balance) || 0;
+
+      // Only vendors with an active positive wallet balance or who have set up payout addresses
+      if (userBalance > 0 || (v.bank_account_number && userBalance > 0)) {
+        const hasAccount = Boolean(v.bank_account_number && v.bank_account_number.trim().length > 0);
+        const bankName = v.bank_code || 'Not Set';
+        const accNum = v.bank_account_number || 'Not Set';
+        const accName = v.bank_account_name || user?.full_name || v.business_name || 'Not Set';
+
+        payoutsList.push({
+          id: `PAY-${v.id.substring(0, 8).toUpperCase()}`,
+          vendorId: v.id,
+          userId: v.user_id || '',
+          recipient: v.business_name,
+          owner: user?.full_name || 'Store Owner',
+          phone: user?.phone_number || 'No Phone',
+          type: 'Vendor',
+          amount: `₦${userBalance.toLocaleString()}`,
+          rawAmount: userBalance,
+          bankName,
+          accountNumber: accNum,
+          accountName: accName,
+          payoutAddressFull: hasAccount
+            ? `${bankName} • ${accNum} (${accName})`
+            : 'No Payout Address Saved',
+          hasPayoutAddress: hasAccount,
+          status: hasAccount ? 'Pending Transfer' : 'Awaiting Address',
+          requestedDate: v.updated_at
+            ? new Date(v.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Recent',
+        });
+      }
+    });
+
+    return payoutsList;
+  } catch (err) {
+    console.error('Error fetching admin payouts from DB:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin processes or marks a vendor payout as settled
+ */
+export async function settleVendorPayoutAction(params: {
+  vendorId: string;
+  userId?: string;
+  amount?: number;
+}) {
+  try {
+    const supabase = await createClient();
+
+    // Reset wallet balance or log transaction
+    if (params.userId) {
+      await supabase
+        .from('users')
+        .update({ wallet_balance: 0 })
+        .eq('id', params.userId);
+    }
+
+    try {
+      await supabase.from('wallet_transactions').insert({
+        user_id: params.userId || params.vendorId,
+        amount: params.amount || 0,
+        type: 'payout',
+        reference: `SETTLE-${Date.now()}`,
+        description: 'Admin bank transfer settlement disbursed to merchant',
+        status: 'completed',
+      });
+    } catch (e) {
+      // table might not exist yet
+    }
+
+    return {
+      success: true,
+      message: 'Payout marked as successfully disbursed via Nigerian Inter-Bank Settlement (NIBSS).',
+    };
+  } catch (err: any) {
+    console.error('Error settling vendor payout:', err);
+    return { success: false, message: err.message || 'Failed to settle payout.' };
+  }
+}
+
 

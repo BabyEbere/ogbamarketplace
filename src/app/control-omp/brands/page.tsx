@@ -26,17 +26,23 @@ import {
   getAllBrandsAction, 
   createBrandAction, 
   updateBrandAction, 
-  deleteBrandAction 
+  deleteBrandAction,
+  getBrandRequestsAction,
+  reviewBrandRequestAction,
+  BrandRequestRecord,
 } from '@/actions/brands';
 import { getCategories } from '@/actions/categories';
 import { optimizeBrandLogo, formatBytes, OptimizedImageResult } from '@/lib/image-optimizer';
 
 export default function AdminBrandsPage() {
+  const [activeView, setActiveView] = useState<'brands' | 'requests'>('brands');
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brandRequests, setBrandRequests] = useState<BrandRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
+  const [reviewLoadingId, setReviewLoadingId] = useState<string | null>(null);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -67,18 +73,59 @@ export default function AdminBrandsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [brandsData, catsData] = await Promise.all([
+      const [brandsData, catsData, requestsData] = await Promise.all([
         getAllBrandsAction(),
         getCategories(),
+        getBrandRequestsAction('all'),
       ]);
       setBrands(brandsData);
       setCategories(catsData);
+      setBrandRequests(requestsData);
     } catch (err) {
       console.error('Error loading brands data:', err);
     } finally {
       setLoading(false);
     }
   }
+
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      setReviewLoadingId(requestId);
+      const res = await reviewBrandRequestAction({ requestId, action: 'approve' });
+      if (res.success) {
+        await loadData();
+      } else {
+        alert(res.error || 'Failed to approve brand.');
+      }
+    } catch (err) {
+      alert('Error approving brand request.');
+    } finally {
+      setReviewLoadingId(null);
+    }
+  };
+
+  const handleDeclineRequest = async (requestId: string) => {
+    const reason = prompt('Please enter the reason for declining this brand request:');
+    if (reason === null) return;
+
+    try {
+      setReviewLoadingId(requestId);
+      const res = await reviewBrandRequestAction({
+        requestId,
+        action: 'decline',
+        rejectionReason: reason.trim() || 'Brand request does not meet platform criteria.',
+      });
+      if (res.success) {
+        await loadData();
+      } else {
+        alert(res.error || 'Failed to decline brand request.');
+      }
+    } catch (err) {
+      alert('Error declining brand request.');
+    } finally {
+      setReviewLoadingId(null);
+    }
+  };
 
   const handleOpenAddModal = () => {
     setEditingBrand(null);
@@ -289,9 +336,47 @@ export default function AdminBrandsPage() {
           </div>
         </div>
 
-        {/* Filter and Action Bar */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+        {/* Tab Switcher: Catalog Brands vs Vendor Brand Requests */}
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+          <button
+            onClick={() => setActiveView('brands')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              activeView === 'brands'
+                ? 'bg-forest-850 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Tag className="w-4 h-4" />
+            <span>Catalog Brands ({brands.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveView('requests')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              activeView === 'requests'
+                ? 'bg-forest-850 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>Merchant Brand Requests</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                brandRequests.filter((r) => r.status === 'pending').length > 0
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {brandRequests.filter((r) => r.status === 'pending').length}
+            </span>
+          </button>
+        </div>
+
+        {/* VIEW 1: Catalog Brands */}
+        {activeView === 'brands' && (
+          <div className="space-y-6">
+            {/* Filter and Action Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             {/* Search Input */}
             <div className="relative w-full sm:w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -465,6 +550,137 @@ export default function AdminBrandsPage() {
           </div>
         </div>
       </div>
+    )}
+
+    {/* VIEW 2: Merchant Brand Requests */}
+    {activeView === 'requests' && (
+      <div className="space-y-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <h3 className="font-extrabold text-slate-900 text-base">
+              Merchant Brand Addition Requests
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Review brand requests submitted by vendors while uploading their products.
+            </p>
+          </div>
+          <button
+            onClick={loadData}
+            className="p-2 text-slate-500 hover:text-forest-850 hover:bg-slate-100 rounded-xl transition-colors"
+            title="Refresh requests"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-5 py-3.5">Brand Requested</th>
+                  <th className="px-5 py-3.5">Vendor Store</th>
+                  <th className="px-5 py-3.5">Department</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {brandRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-12 text-center text-xs text-slate-400">
+                      No merchant brand requests in the queue.
+                    </td>
+                  </tr>
+                ) : (
+                  brandRequests.map((req) => (
+                    <tr key={req.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="font-bold text-slate-900">{req.brandName}</div>
+                        {req.websiteUrl && (
+                          <a
+                            href={req.websiteUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-forest-800 hover:underline flex items-center gap-1 mt-0.5"
+                          >
+                            <span>{req.websiteUrl}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {req.description && (
+                          <div className="text-[11px] text-slate-500 mt-0.5 italic">{req.description}</div>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3.5 text-xs font-semibold text-slate-700">
+                        {req.vendorName}
+                      </td>
+
+                      <td className="px-5 py-3.5 text-xs text-slate-600">
+                        <span className="bg-slate-100 text-slate-800 px-2.5 py-1 rounded-full text-xs font-semibold">
+                          {req.categoryName}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                            req.status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : req.status === 'declined'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              req.status === 'approved'
+                                ? 'bg-emerald-500'
+                                : req.status === 'declined'
+                                ? 'bg-rose-500'
+                                : 'bg-amber-500'
+                            }`}
+                          />
+                          <span className="capitalize">{req.status}</span>
+                        </span>
+                        {req.rejectionReason && (
+                          <p className="text-[10px] text-rose-600 mt-1 max-w-xs">{req.rejectionReason}</p>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-3.5 text-right">
+                        {req.status === 'pending' ? (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => handleApproveRequest(req.id)}
+                              disabled={reviewLoadingId === req.id}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleDeclineRequest(req.id)}
+                              disabled={reviewLoadingId === req.id}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium">Reviewed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
 
       {/* MODAL: Add / Edit Brand */}
       {showModal && (

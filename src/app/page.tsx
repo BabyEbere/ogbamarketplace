@@ -400,7 +400,6 @@ function HomePageContent() {
               <h4 className="footer-title">Help & Trust</h4>
               <ul className="footer-links">
                 <li><Link href="/vendor">Vendor Portal & Store Manager</Link></li>
-                <li><Link href="/control-omp">Admin Control Dashboard</Link></li>
                 <li><Link href="#">How Paystack Escrow Works</Link></li>
                 <li><Link href="#">Vendor Verification (KYC)</Link></li>
                 <li><Link href="#">Dispatch & Pickup Points</Link></li>

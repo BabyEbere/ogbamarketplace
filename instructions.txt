@@ -1,0 +1,32 @@
+what's on the app, is different from what's on the website, 
+
+in the control site setting, there's a place to where i put community names, so you should allow vendor dropdown to see and select their community
+
+vendor can't just apply to be a vendor and instantly get verified, we, the admin need to see them and choose to verify them
+
+kyc status is different from earning a verification badge please, kyc that we the admin is to approve is for the vendor to be able to sell, then earning a verification badge, the badge is monetary, the admin should choose what is required to get the badge, and price
+
+and the category being listed in the app vendor side, should be gotten from the category section, and there should be a place to ask if their products have brand, if yes, they can choose our brand list, if there brand isn't listed there, they can request we add the brand, admin can see the request and choose to accept it or decline
+
+and please, the image url in the add new product, is null, they must upload the image of the product, it must be square, remember what we did while uploading brand logo and how the storage works, that's the same thing you'd do too
+
+also when registering the category shown there is hardcoded
+
+and also, adding products, doesn't automatically upload to the market place, it must be approved first by the admin please
+
+and i want these to apply to both the app and website
+
+so in the control, if theres a new product to review before approving, there should be a page for approving it, and the sidebar should have badge counter, if admin is declining vendor's product, he can choose to give reasons
+
+then the live server isn't showing the products, see what its showing (ogbamarketplace.com.ng)
+vhewxumicwxrvltrmrkh.supabase.co/rest/v1/community_notices?select=*&order=published_at.desc&limit=4:1  Failed to load resource: the server responded with a status of 401 ()
+jquery.js:1040 [Violation] Permissions policy violation: unload is not allowed in this document.
+
+
+remove the admin access from the footer please.
+
+i also saw in the landing page for the website, the accounts dropdown has link to the admin portal, remove it
+
+the admin should be able to upload banks they're paying out too
+
+and also i can't delete products, if i delete them, it'll still comeback

@@ -243,11 +243,22 @@ export default function LoginScreen() {
         // Sign in with email or phone
         const res = await loginWithIdentifier(loginIdentifier);
         if (res.success) {
-          Alert.alert(
-            'Welcome Back to OGBA MARKET PLACE',
-            'You are now logged in securely.',
-            [{ text: 'Continue', onPress: () => router.back() }]
-          );
+          if (res.user?.role === 'vendor') {
+            Alert.alert(
+              'Welcome Back, Vendor Partner!',
+              'You are logged in with your Merchant Store account.',
+              [
+                { text: 'Open Vendor Dashboard', onPress: () => router.replace('/vendor/dashboard') },
+                { text: 'Browse Products (Buyer Mode)', onPress: () => router.back() },
+              ]
+            );
+          } else {
+            Alert.alert(
+              'Welcome Back to OGBA MARKET PLACE',
+              'You are now logged in securely.',
+              [{ text: 'Continue', onPress: () => router.back() }]
+            );
+          }
         } else {
           setErrorMessage(res.message || 'Login failed. Please check your credentials.');
         }

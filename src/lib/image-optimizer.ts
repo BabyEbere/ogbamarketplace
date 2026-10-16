@@ -109,6 +109,101 @@ export async function optimizeBrandLogo(
 }
 
 /**
+ * Browser-side Image Optimizer specifically for Product Images
+ * Center-crops to an exact 1:1 square aspect ratio and converts to modern WebP
+ */
+export async function optimizeSquareProductImage(
+  file: File,
+  targetSquareDimension = 600,
+  quality = 0.85
+): Promise<OptimizedImageResult> {
+  const originalSize = file.size;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const { width, height } = img;
+
+      // Calculate center square crop source coordinates
+      const minDimension = Math.min(width, height);
+      const srcX = Math.round((width - minDimension) / 2);
+      const srcY = Math.round((height - minDimension) / 2);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetSquareDimension;
+      canvas.height = targetSquareDimension;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas 2D context not supported'));
+        return;
+      }
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // Draw center-cropped square to target dimensions
+      ctx.drawImage(
+        img,
+        srcX,
+        srcY,
+        minDimension,
+        minDimension,
+        0,
+        0,
+        targetSquareDimension,
+        targetSquareDimension
+      );
+
+      // Export as modern WebP
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Failed to compress square product image to WebP'));
+            return;
+          }
+
+          const baseName = file.name.replace(/\.[^/.]+$/, '');
+          const optimizedFileName = `${baseName}_square.webp`;
+
+          const optimizedFile = new File([blob], optimizedFileName, {
+            type: 'image/webp',
+            lastModified: Date.now(),
+          });
+
+          const optimizedSize = optimizedFile.size;
+          const savingsPercent = Math.max(
+            0,
+            Math.round(((originalSize - optimizedSize) / originalSize) * 100)
+          );
+
+          resolve({
+            file: optimizedFile,
+            originalSize,
+            optimizedSize,
+            savingsPercent,
+            previewUrl: URL.createObjectURL(optimizedFile),
+          });
+        },
+        'image/webp',
+        quality
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load product image for optimization'));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+/**
  * Utility to format byte sizes into readable KB / MB
  */
 export function formatBytes(bytes: number, decimals = 1): string {

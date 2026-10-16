@@ -16,6 +16,7 @@ import {
 import Navbar from '@/components/Navbar';
 import ProductCard from '@/components/ProductCard';
 import ProductClientActions from './ProductClientActions';
+import ProductPageBottomNav from './ProductPageBottomNav';
 import { getProductBySlug, getSimilarProducts } from '@/actions/products';
 
 interface ProductPageProps {
@@ -159,7 +160,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
       <Navbar />
 
-      <main className="container" style={{ paddingBottom: '4rem', paddingTop: '1.25rem' }}>
+      <main className="container" style={{ paddingBottom: '5.5rem', paddingTop: '1rem' }}>
         {/* Breadcrumb Navigation */}
         <nav
           aria-label="Breadcrumb"
@@ -188,38 +189,40 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         </nav>
 
         {/* Product Details Layout */}
-        <div className="product-page-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem', marginBottom: '2.5rem' }}>
-          {/* Left Column: Image Gallery */}
-          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.25rem', border: '1px solid var(--border-light)', position: 'relative' }}>
-            <div style={{ position: 'relative', width: '100%', height: '380px', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: '#F1F5F9' }}>
+        <div className="product-page-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+          {/* Left Column: Image Gallery (Strictly Square 300px Container) */}
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '0.85rem', border: '1px solid var(--border-light)', position: 'relative', maxWidth: '320px', margin: '0 auto', width: '100%' }}>
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: '#F8FAFC' }}>
               <Image
-                src={product.images[0] || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80'}
+                src={product.images[0] || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80'}
                 alt={product.title}
                 fill
                 priority
+                sizes="(max-width: 640px) 290px, 320px"
                 style={{ objectFit: 'cover' }}
               />
               {discountPercentage > 0 && (
-                <div style={{ position: 'absolute', top: 12, left: 12, background: 'var(--accent-red)', color: 'white', fontWeight: 800, fontSize: '0.78rem', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-md)' }}>
-                  -{discountPercentage}% OFF
+                <div style={{ position: 'absolute', top: 8, left: 8, background: 'var(--accent-red)', color: 'white', fontWeight: 800, fontSize: '0.7rem', padding: '0.2rem 0.45rem', borderRadius: 'var(--radius-md)', zIndex: 2 }}>
+                  -{discountPercentage}%
                 </div>
               )}
             </div>
 
             {/* Thumbnails if multiple images exist */}
             {product.images.length > 1 && (
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
                 {product.images.map((img, idx) => (
                   <div
                     key={idx}
                     style={{
-                      width: '60px',
-                      height: '60px',
+                      width: '48px',
+                      height: '48px',
                       position: 'relative',
                       borderRadius: 'var(--radius-md)',
                       overflow: 'hidden',
                       border: idx === 0 ? '2px solid var(--primary-green)' : '1px solid var(--border-light)',
                       cursor: 'pointer',
+                      flexShrink: 0,
                     }}
                   >
                     <Image src={img} alt={`${product.title} preview ${idx + 1}`} fill style={{ objectFit: 'cover' }} />
@@ -230,48 +233,68 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           </div>
 
           {/* Right Column: Information & Actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.5rem', border: '1px solid var(--border-light)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary-green)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.15rem 1.25rem', border: '1px solid var(--border-light)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--primary-green)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                   {product.categoryName}
                 </span>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                   SKU: {product.sku}
                 </span>
               </div>
 
-              <h1 style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--text-main)', lineHeight: 1.3, marginBottom: '0.75rem' }}>
+              <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.35, marginBottom: '0.5rem' }}>
                 {product.title}
               </h1>
 
               {/* Ratings and Merchant Info */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', color: '#F59E0B' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.65rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', color: '#F59E0B' }}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} size={15} fill="currentColor" />
+                    <Star key={s} size={13} fill="currentColor" />
                   ))}
                 </div>
-                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--text-main)' }}>{product.rating}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>({product.reviewCount} verified reviews)</span>
-                <span style={{ marginLeft: 'auto', background: 'var(--primary-light)', color: 'var(--primary-green)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-full)', fontSize: '0.74rem', fontWeight: 700 }}>
+                <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--text-main)' }}>{product.rating}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({product.reviewCount})</span>
+                <span style={{ marginLeft: 'auto', background: 'var(--primary-light)', color: 'var(--primary-green)', padding: '0.15rem 0.5rem', borderRadius: 'var(--radius-full)', fontSize: '0.7rem', fontWeight: 700 }}>
                   {product.stock > 0 ? `${product.stock} In Stock` : 'Out of Stock'}
                 </span>
               </div>
 
-              {/* Just Merchant's Name (No Profile Card or Address) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-                <Store size={15} color="var(--primary-green)" />
+              {/* Merchant's Name + Admin Verification Badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.85rem', flexWrap: 'wrap' }}>
+                <Store size={14} color="var(--primary-green)" />
                 <span>Sold by: <strong style={{ color: 'var(--text-main)' }}>{product.vendorName}</strong></span>
+                {product.vendorVerified && (
+                  <span 
+                    title="Verified Merchant on Ogba Marketplace" 
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.2rem', 
+                      background: '#ECFDF5', 
+                      color: '#059669', 
+                      fontSize: '0.7rem', 
+                      fontWeight: 800, 
+                      padding: '0.12rem 0.45rem', 
+                      borderRadius: '9999px',
+                      border: '1px solid rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    <CheckCircle size={11} />
+                    <span>Verified</span>
+                  </span>
+                )}
               </div>
 
-              {/* Price Row (Without Unit) */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '1.85rem', fontWeight: 900, color: 'var(--primary-green)' }}>
+              {/* Price Row */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', marginBottom: '1rem', paddingBottom: '0.85rem', borderBottom: '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: '1.45rem', fontWeight: 900, color: 'var(--primary-green)' }}>
                   ₦{product.price.toLocaleString()}
                 </span>
                 {product.compareAtPrice && (
-                  <span style={{ fontSize: '1.05rem', color: 'var(--text-muted)', textDecorationLine: 'line-through' }}>
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecorationLine: 'line-through' }}>
                     ₦{product.compareAtPrice.toLocaleString()}
                   </span>
                 )}
@@ -282,20 +305,20 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             </div>
 
             {/* Trust & Guarantee Badges */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)' }}>
-                <ShieldCheck size={20} color="var(--primary-green)" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-card)', padding: '0.7rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)' }}>
+                <ShieldCheck size={18} color="var(--primary-green)" />
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 800 }}>Paystack Escrow</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Funds safe until delivery</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 800 }}>Paystack Escrow</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Protected funds</div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)' }}>
-                <Truck size={20} color="var(--accent-orange)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-card)', padding: '0.7rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-light)' }}>
+                <Truck size={18} color="var(--accent-orange)" />
                 <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 800 }}>Same-Day Dispatch</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Direct across Omoku & Egi</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 800 }}>Same-Day Dispatch</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Across Omoku & Egi</div>
                 </div>
               </div>
             </div>
@@ -303,42 +326,42 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         </div>
 
         {/* Product Description & Specifications */}
-        <section style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', border: '1px solid var(--border-light)', marginBottom: '2.5rem' }}>
-          <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '1rem' }}>
+        <section style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.15rem 1.25rem', border: '1px solid var(--border-light)', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.75rem' }}>
             Product Description & Specifications
           </h2>
-          <div style={{ color: 'var(--text-subtle)', lineHeight: 1.7, fontSize: '0.92rem', whiteSpace: 'pre-line', marginBottom: '1.5rem' }}>
+          <div style={{ color: 'var(--text-subtle)', lineHeight: 1.6, fontSize: '0.86rem', whiteSpace: 'pre-line', marginBottom: '1rem' }}>
             {product.description || 'Authentic local product sourced directly from verified merchants in Omoku, Egi, Obrikom and neighboring communities in Rivers State. Backed by full warranty and same-day delivery.'}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', background: 'var(--bg-main)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', background: 'var(--bg-main)', padding: '1rem', borderRadius: 'var(--radius-lg)' }}>
             <div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Brand</div>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)' }}>{product.brandName || 'Verified Brand'}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Brand</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{product.brandName || 'Verified Brand'}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Department</div>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)' }}>{product.categoryName}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Department</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>{product.categoryName}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Condition</div>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)' }}>Brand New / Authentic</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Condition</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>Brand New / Authentic</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Escrow Protection</div>
-              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-main)' }}>Protected by Paystack</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Escrow Protection</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>Protected by Paystack</div>
             </div>
           </div>
         </section>
 
         {/* Verified Customer Reviews */}
-        <section style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.75rem', border: '1px solid var(--border-light)', marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <section style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-xl)', padding: '1.15rem 1.25rem', border: '1px solid var(--border-light)', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+              <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
                 Verified Customer Reviews
               </h2>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                 Real feedback from purchasers in Omoku, Egi and Obrikom
               </p>
             </div>
@@ -413,6 +436,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           </section>
         )}
       </main>
+
+      {/* Floating Mobile Bottom Navigation */}
+      <ProductPageBottomNav />
     </div>
   );
 }

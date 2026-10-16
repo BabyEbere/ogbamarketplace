@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, Calendar, Megaphone } from 'lucide-react';
 import { CommunityNotice } from '@/types/marketplace';
-import { createClient } from '@/lib/supabase/client';
+import { getCommunityNoticesAction } from '@/actions/communities';
 
 export default function CommunityNoticeBoard() {
   const [notices, setNotices] = useState<CommunityNotice[]>([]);
@@ -11,13 +11,7 @@ export default function CommunityNoticeBoard() {
   useEffect(() => {
     async function loadNotices() {
       try {
-        const supabase = createClient();
-        const { data } = await supabase
-          .from('community_notices')
-          .select('*')
-          .order('published_at', { ascending: false })
-          .limit(4);
-
+        const data = await getCommunityNoticesAction();
         if (data && data.length > 0) {
           setNotices(
             data.map((n: any) => ({

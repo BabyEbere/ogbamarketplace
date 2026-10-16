@@ -40,6 +40,7 @@ export default function Navbar({
   const [selectedLocation, setSelectedLocation] = useState('Omoku Central');
   const [localSearch, setLocalSearch] = useState(propSearchQuery);
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     async function loadCategories() {
@@ -80,10 +81,18 @@ export default function Navbar({
             <MapPin size={14} color="#6EE7B7" />
             <span>Serving: <strong>{selectedLocation}</strong>, Egi, Obrikom & Erema Communities</span>
           </div>
-          <div className="top-bar-vendor-link">
+          <div className="top-bar-vendor-link" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <Link href="/vendor" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#D1FAE5' }}>
               <Store size={13} />
-              <span>Sell on Ogba Marketplace (Vendor Portal)</span>
+              <span>Vendor Portal</span>
+            </Link>
+            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem' }}>|</span>
+            <Link href="/vendor/login" style={{ color: '#A7F3D0', fontWeight: 600, fontSize: '0.75rem', textDecoration: 'none' }}>
+              Vendor Sign In
+            </Link>
+            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem' }}>|</span>
+            <Link href="/vendor/register" style={{ color: '#FCD34D', fontWeight: 700, fontSize: '0.75rem', textDecoration: 'none' }}>
+              Register Store
             </Link>
           </div>
         </div>
@@ -135,12 +144,103 @@ export default function Navbar({
           </div>
 
           {/* Header Action Buttons */}
-          <div className="header-actions">
-            <button className="header-btn header-btn-account" title="Account">
-              <User size={18} color="var(--primary-green)" />
-              <span className="header-btn-text">Account</span>
-              <ChevronDown size={14} color="var(--text-muted)" className="header-btn-chevron" />
-            </button>
+          <div className="header-actions" style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
+              <button 
+                className="header-btn header-btn-account" 
+                title="Account & Merchant Portal"
+                onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+              >
+                <User size={18} color="var(--primary-green)" />
+                <span className="header-btn-text">Account</span>
+                <ChevronDown size={14} color="var(--text-muted)" className="header-btn-chevron" />
+              </button>
+
+              {/* Account Dropdown Menu */}
+              {isAccountMenuOpen && (
+                <div 
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: '210px',
+                    background: '#FFFFFF',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--border-light)',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                    zIndex: 1050,
+                    padding: '0.4rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                  }}
+                >
+                  <Link
+                    href="/vendor"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.6rem 0.75rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      color: 'var(--text-main)',
+                      textDecoration: 'none',
+                      borderRadius: 'var(--radius-md)',
+                      transition: 'background 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-main)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Store size={15} color="var(--primary-green)" />
+                    <span>Vendor Dashboard</span>
+                  </Link>
+
+                  <Link
+                    href="/vendor/login"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.6rem 0.75rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      color: 'var(--text-subtle)',
+                      textDecoration: 'none',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-main)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <User size={15} />
+                    <span>Vendor Login</span>
+                  </Link>
+
+                  <Link
+                    href="/vendor/register"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.6rem 0.75rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      color: 'var(--text-subtle)',
+                      textDecoration: 'none',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-main)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Store size={15} />
+                    <span>Register Store</span>
+                  </Link>
+                </div>
+              )}
+            </div>
 
             <button className="header-btn header-btn-fav" title="Favorites" aria-label="Favorites">
               <Heart size={18} color="var(--text-muted)" />

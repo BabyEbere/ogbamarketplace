@@ -10,6 +10,7 @@ export async function getProducts(options?: {
   brandId?: string;
   searchQuery?: string;
   isDealOfDay?: boolean;
+  includeInactive?: boolean;
 }): Promise<Product[]> {
   try {
     const supabase = await createClient();
@@ -29,10 +30,17 @@ export async function getProducts(options?: {
       is_deal_of_day,
       is_fresh_produce,
       images,
+      approval_status,
+      is_active,
       vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
       category:categories(id, name, slug),
       brand:brands(id, name, slug, logo_url)
     `);
+
+    // Only show active and approved products to marketplace shoppers by default
+    if (!options?.includeInactive) {
+      query = query.eq('is_active', true);
+    }
 
     if (options?.categorySlug && options.categorySlug !== 'all') {
       query = query.eq('category.slug', options.categorySlug);
@@ -67,7 +75,7 @@ export async function getProducts(options?: {
         vendorId: item.vendor_id || '',
         vendorName: vendorData?.business_name || 'Verified Merchant',
         vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
-        vendorVerified: vendorData?.is_verified ?? true,
+        vendorVerified: Boolean(vendorData?.is_verified),
         title: item.title,
         slug: item.slug || item.id,
         description: item.description || '',
@@ -148,7 +156,7 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
       vendorId: data.vendor_id || '',
       vendorName: vendorData?.business_name || 'Verified Merchant',
       vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
-      vendorVerified: vendorData?.is_verified ?? true,
+      vendorVerified: Boolean(vendorData?.is_verified),
       title: data.title,
       slug: data.slug || data.id,
       description: data.description || '',
@@ -258,7 +266,7 @@ export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?
         vendorId: item.vendor_id || '',
         vendorName: vendorData?.business_name || 'Verified Merchant',
         vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
-        vendorVerified: vendorData?.is_verified ?? true,
+        vendorVerified: Boolean(vendorData?.is_verified),
         title: item.title,
         slug: item.slug || item.id,
         description: item.description || '',
@@ -426,23 +434,69 @@ export async function toggleProductDealAction(params: {
 }
 
 /**
- * Admin action: Delete a product from database
+ * Delete or permanently archive a product from database
  */
 export async function deleteProductAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
-    const { error } = await supabase.from('products').delete().eq('id', id);
 
-    if (error) {
-      console.error('Error deleting product from DB:', error);
-      return { success: false, error: error.message };
+    // 1. Attempt hard deletion first
+    const { error: hardDeleteErr } = await supabase.from('products').delete().eq('id', id);
+
+    if (hardDeleteErr) {
+      console.warn('Hard delete on products failed (likely foreign key constraint); falling back to soft archive:', hardDeleteErr.message);
+
+      // 2. If blocked by foreign key (e.g. order_items), soft archive so it never comes back
+      const { error: softDeleteErr } = await supabase
+        .from('products')
+        .update({
+          is_active: false,
+          approval_status: 'declined',
+          rejection_reason: 'Deleted by merchant / admin',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (softDeleteErr) {
+        return { success: false, error: softDeleteErr.message };
+      }
     }
 
     revalidatePath('/control-omp/products');
+    revalidatePath('/vendor/products');
     revalidatePath('/');
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false, error: err.message || 'Failed to delete product.' };
+  }
+}
+
+/**
+ * Toggle stock availability of a product
+ */
+export async function toggleProductStockAction(params: {
+  id: string;
+  inStock: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('products')
+      .update({
+        stock_quantity: params.inStock ? 10 : 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.id);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/vendor/products');
+    revalidatePath('/control-omp/products');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to update stock.' };
   }
 }
 
@@ -557,5 +611,283 @@ export async function createProductAdminAction(params: {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export interface VendorProductItem {
+  id: string;
+  name: string;
+  price: number;
+  compareAtPrice?: number;
+  category: string;
+  categoryId: string;
+  brandName?: string;
+  brandId?: string;
+  imageUrl: string;
+  images: string[];
+  description: string;
+  unit: string;
+  stock: number;
+  inStock: boolean;
+  approvalStatus: 'pending' | 'approved' | 'declined';
+  rejectionReason?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+/**
+ * Vendor action: Create product (defaults to pending approval, not yet live)
+ */
+export async function createVendorProductAction(params: {
+  vendorId: string;
+  title: string;
+  price: number;
+  compareAtPrice?: number;
+  stock: number;
+  unit?: string;
+  categoryId: string;
+  brandId?: string;
+  description?: string;
+  imageUrl: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const title = params.title.trim();
+    if (!title) {
+      return { success: false, error: 'Product name is required.' };
+    }
+    if (!params.price || params.price <= 0) {
+      return { success: false, error: 'Please enter a valid selling price.' };
+    }
+    if (!params.imageUrl || !params.imageUrl.trim()) {
+      return { success: false, error: 'A square product image is required. Please upload an image.' };
+    }
+
+    const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString().slice(-4)}`;
+
+    const { error } = await supabase.from('products').insert({
+      vendor_id: params.vendorId,
+      category_id: params.categoryId,
+      brand_id: params.brandId || null,
+      title,
+      slug,
+      price: params.price,
+      compare_at_price: params.compareAtPrice || null,
+      stock_quantity: params.stock || 1,
+      unit: params.unit || 'Piece',
+      description: params.description?.trim() || '',
+      images: [params.imageUrl.trim()],
+      approval_status: 'pending', // Requires admin approval!
+      is_active: false, // Hidden until approved!
+    });
+
+    if (error) {
+      console.error('Error inserting vendor product:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/vendor/products');
+    revalidatePath('/control-omp/products');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to submit product for review.' };
+  }
+}
+
+/**
+ * Fetch all products belonging to a specific vendor
+ */
+export async function getVendorProductsAction(vendorId: string): Promise<VendorProductItem[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(id, name),
+        brand:brands(id, name)
+      `)
+      .eq('vendor_id', vendorId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('Error fetching vendor products:', error);
+      return [];
+    }
+
+    return data.map((item: any) => {
+      const img = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : '';
+      return {
+        id: item.id,
+        name: item.title,
+        price: Number(item.price) || 0,
+        compareAtPrice: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+        category: item.category?.name || 'Department',
+        categoryId: item.category_id,
+        brandName: item.brand?.name || item.brand_name || undefined,
+        brandId: item.brand_id,
+        imageUrl: img,
+        images: Array.isArray(item.images) ? item.images : [img],
+        description: item.description || '',
+        unit: item.unit || 'Piece',
+        stock: item.stock_quantity ?? 0,
+        inStock: (item.stock_quantity ?? 0) > 0,
+        approvalStatus: item.approval_status || (item.is_active ? 'approved' : 'pending'),
+        rejectionReason: item.rejection_reason,
+        isActive: Boolean(item.is_active),
+        createdAt: item.created_at || new Date().toISOString(),
+      };
+    });
+  } catch (err) {
+    console.error('Exception in getVendorProductsAction:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin action: Get count of pending products awaiting approval
+ */
+export async function getPendingProductsCountAction(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('approval_status', 'pending');
+
+    if (error) return 0;
+    return count || 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+export interface PendingProductReviewRecord {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  vendorLocation: string;
+  title: string;
+  slug: string;
+  price: number;
+  compareAtPrice?: number;
+  stock: number;
+  unit: string;
+  categoryName: string;
+  brandName?: string;
+  images: string[];
+  description: string;
+  createdAt: string;
+}
+
+/**
+ * Admin action: Fetch all pending products awaiting approval
+ */
+export async function getPendingProductsReviewAction(): Promise<PendingProductReviewRecord[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        *,
+        vendor:vendors(id, business_name, market_location),
+        category:categories(id, name),
+        brand:brands(id, name)
+      `)
+      .eq('approval_status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('Error fetching pending products:', error);
+      return [];
+    }
+
+    return data.map((item: any) => ({
+      id: item.id,
+      vendorId: item.vendor_id,
+      vendorName: item.vendor?.business_name || 'Vendor Merchant',
+      vendorLocation: item.vendor?.market_location || 'Omoku',
+      title: item.title,
+      slug: item.slug,
+      price: Number(item.price) || 0,
+      compareAtPrice: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+      stock: item.stock_quantity ?? 0,
+      unit: item.unit || 'Piece',
+      categoryName: item.category?.name || 'Unassigned',
+      brandName: item.brand?.name || undefined,
+      images: Array.isArray(item.images) ? item.images : [],
+      description: item.description || '',
+      createdAt: item.created_at || new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.error('Exception in getPendingProductsReviewAction:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin approves a pending product
+ */
+export async function approveProductAction(productId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('products')
+      .update({
+        approval_status: 'approved',
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', productId);
+
+    if (error) {
+      console.error('Error approving product in DB:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/control-omp/products');
+    revalidatePath('/vendor/products');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to approve product.' };
+  }
+}
+
+/**
+ * Admin declines a pending product with a mandatory reason
+ */
+export async function declineProductAction(params: {
+  productId: string;
+  reason: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const reason = params.reason.trim();
+    if (!reason) {
+      return { success: false, error: 'A reason is required when declining a product.' };
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({
+        approval_status: 'declined',
+        is_active: false,
+        rejection_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.productId);
+
+    if (error) {
+      console.error('Error declining product in DB:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/control-omp/products');
+    revalidatePath('/vendor/products');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to decline product.' };
   }
 }

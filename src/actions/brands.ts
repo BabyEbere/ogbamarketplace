@@ -303,3 +303,185 @@ export async function deleteBrandAction(id: string): Promise<{ success: boolean;
     return { success: false, error: err.message || 'Server error deleting brand' };
   }
 }
+
+export interface BrandRequestRecord {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  brandName: string;
+  categoryId?: string;
+  categoryName?: string;
+  websiteUrl?: string;
+  logoUrl?: string;
+  description?: string;
+  status: 'pending' | 'approved' | 'declined';
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+/**
+ * Vendor submits a brand request
+ */
+export async function requestNewBrandAction(params: {
+  vendorId?: string;
+  brandName: string;
+  categoryId?: string;
+  websiteUrl?: string;
+  logoUrl?: string;
+  description?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const brandName = params.brandName.trim();
+
+    if (!brandName) {
+      return { success: false, error: 'Please enter the brand name.' };
+    }
+
+    const { error } = await supabase.from('brand_requests').insert({
+      vendor_id: params.vendorId || null,
+      brand_name: brandName,
+      category_id: params.categoryId || null,
+      website_url: params.websiteUrl?.trim() || null,
+      logo_url: params.logoUrl?.trim() || null,
+      description: params.description?.trim() || null,
+      status: 'pending',
+    });
+
+    if (error) {
+      console.error('Error submitting brand request:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/control-omp/brands');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to submit brand request.' };
+  }
+}
+
+/**
+ * Admin fetches brand requests
+ */
+export async function getBrandRequestsAction(
+  filterStatus?: 'pending' | 'approved' | 'declined' | 'all'
+): Promise<BrandRequestRecord[]> {
+  try {
+    const supabase = await createClient();
+    let query = supabase.from('brand_requests').select(`
+      *,
+      vendor:vendors(id, business_name),
+      category:categories(id, name)
+    `).order('created_at', { ascending: false });
+
+    if (filterStatus && filterStatus !== 'all') {
+      query = query.eq('status', filterStatus);
+    }
+
+    const { data, error } = await query;
+
+    if (error || !data) {
+      console.error('Error fetching brand requests:', error);
+      return [];
+    }
+
+    return data.map((r: any) => ({
+      id: r.id,
+      vendorId: r.vendor_id || '',
+      vendorName: r.vendor?.business_name || 'Merchant Store',
+      brandName: r.brand_name,
+      categoryId: r.category_id,
+      categoryName: r.category?.name || 'All Departments',
+      websiteUrl: r.website_url,
+      logoUrl: r.logo_url,
+      description: r.description,
+      status: r.status,
+      rejectionReason: r.rejection_reason,
+      createdAt: r.created_at,
+    }));
+  } catch (err) {
+    console.error('Exception in getBrandRequestsAction:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin reviews (approves or declines) a brand request
+ */
+export async function reviewBrandRequestAction(params: {
+  requestId: string;
+  action: 'approve' | 'decline';
+  rejectionReason?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    if (params.action === 'approve') {
+      // 1. Fetch request details
+      const { data: req, error: reqErr } = await supabase
+        .from('brand_requests')
+        .select('*')
+        .eq('id', params.requestId)
+        .single();
+
+      if (reqErr || !req) {
+        return { success: false, error: 'Brand request not found.' };
+      }
+
+      // 2. Insert into brands
+      const slug = req.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const { data: brand, error: bErr } = await supabase
+        .from('brands')
+        .upsert({
+          name: req.brand_name,
+          slug,
+          website_url: req.website_url,
+          logo_url: req.logo_url || null,
+          description: req.description,
+          is_active: true,
+        }, { onConflict: 'slug' })
+        .select('id')
+        .single();
+
+      if (bErr) {
+        console.error('Error inserting brand from request:', bErr);
+        return { success: false, error: bErr.message };
+      }
+
+      // 3. Associate with category if provided
+      if (req.category_id && brand?.id) {
+        await supabase
+          .from('brand_categories')
+          .upsert({
+            brand_id: brand.id,
+            category_id: req.category_id,
+          }, { onConflict: 'brand_id,category_id' });
+      }
+
+      // 4. Update request status to approved
+      await supabase
+        .from('brand_requests')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', params.requestId);
+    } else {
+      // Decline
+      await supabase
+        .from('brand_requests')
+        .update({
+          status: 'declined',
+          rejection_reason: params.rejectionReason?.trim() || 'Brand request does not meet platform criteria.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.requestId);
+    }
+
+    revalidatePath('/control-omp/brands');
+    revalidatePath('/control-omp/products');
+    revalidatePath('/vendor/products');
+    revalidatePath('/');
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to review brand request.' };
+  }
+}
