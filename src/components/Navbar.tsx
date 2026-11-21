@@ -351,7 +351,15 @@ export default function Navbar({
                           style={{ background: 'var(--primary-light)', color: 'var(--primary-green)', fontWeight: 700 }}
                         >
                           <LogIn size={15} />
-                          <span>Customer Sign In / Register</span>
+                          <span>Customer Sign In</span>
+                        </Link>
+                        <Link
+                          href="/register"
+                          onClick={() => setIsAccountMenuOpen(false)}
+                          className="account-menu-link"
+                        >
+                          <User size={15} color="var(--primary-green)" />
+                          <span>Create Account</span>
                         </Link>
                         <Link
                           href="/orders"
@@ -553,15 +561,25 @@ export default function Navbar({
                   <span>My Account</span>
                 </Link>
               ) : (
-                <Link
-                  href="/login"
-                  onClick={() => setIsMobileDrawerOpen(false)}
-                  className="account-menu-link"
-                  style={{ background: 'var(--primary-light)', color: 'var(--primary-green)', fontWeight: 700 }}
-                >
-                  <LogIn size={16} />
-                  <span>Sign In / Create Account</span>
-                </Link>
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className="account-menu-link"
+                    style={{ background: 'var(--primary-light)', color: 'var(--primary-green)', fontWeight: 700 }}
+                  >
+                    <LogIn size={16} />
+                    <span>Sign In</span>
+                  </Link>
+                  <Link
+                    href="/register"
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className="account-menu-link"
+                  >
+                    <User size={16} color="var(--primary-green)" />
+                    <span>Create Account</span>
+                  </Link>
+                </>
               )}
               <Link href="/orders" onClick={() => setIsMobileDrawerOpen(false)} className="account-menu-link">
                 <Package size={16} color="var(--primary-green)" />
