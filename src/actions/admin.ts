@@ -846,23 +846,20 @@ export async function getControlDashboardSnapshotAction(): Promise<ControlDashbo
       communitiesRes,
       pendingProductsRes,
     ] = await Promise.all([
-      supabase.from('users').select('id, platform, last_seen_at, created_at'),
-      supabase.from('vendors').select('id, is_open, kyc_status, balance, wallet_balance, is_verified').then((r) =>
-        r.error
-          ? supabase.from('vendors').select('id, kyc_status, is_verified')
-          : r
-      ),
-      supabase.from('riders').select('id, assigned_zone, is_online, is_available').then((r) =>
+      supabase.from('users').select('*'),
+      supabase.from('vendors').select('*'),
+      supabase.from('riders').select('*').then((r) =>
         r.error ? { data: [], error: null } : r
       ),
       supabase
         .from('orders')
-        .select('id, order_reference, customer_name, delivery_area, total_amount, status, channel, rider_name, created_at')
+        .select('*')
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(50)
+        .then((r) => (r.error ? { data: [], error: null } : r)),
       supabase
         .from('payouts')
-        .select('id, amount, status')
+        .select('*')
         .eq('status', 'pending')
         .then((r) => (r.error ? { data: [], error: null } : r)),
       supabase
