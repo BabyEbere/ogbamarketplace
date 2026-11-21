@@ -87,7 +87,7 @@ export default function ProductDetailModal({
             </div>
 
             {/* Description */}
-            <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 leading-relaxed">
+            <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 leading-relaxed max-h-36 overflow-y-auto pr-1 whitespace-pre-line">
               <strong className="block text-slate-800 font-bold mb-1">Product Details:</strong>
               {product.description}
             </div>

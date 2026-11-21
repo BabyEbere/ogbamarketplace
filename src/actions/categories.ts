@@ -18,7 +18,7 @@ export interface AdminCategoryRecord {
 }
 
 /**
- * Public action: get categories for storefront
+ * Public action: get categories for storefront with live view popularity
  */
 export async function getCategories(): Promise<Category[]> {
   try {
@@ -29,14 +29,34 @@ export async function getCategories(): Promise<Category[]> {
       .order('display_order', { ascending: true });
 
     if (!error && data && data.length > 0) {
+      // Calculate view counts and item counts from products
+      const { data: prodStats } = await supabase
+        .from('products')
+        .select('category_id, view_count')
+        .eq('is_active', true)
+        .eq('approval_status', 'approved');
+
+      const viewsMap: Record<string, number> = {};
+      const countMap: Record<string, number> = {};
+
+      if (prodStats) {
+        prodStats.forEach((p: any) => {
+          if (p.category_id) {
+            viewsMap[p.category_id] = (viewsMap[p.category_id] || 0) + (Number(p.view_count) || 0);
+            countMap[p.category_id] = (countMap[p.category_id] || 0) + 1;
+          }
+        });
+      }
+
       return data.map((cat: any) => ({
         id: cat.id,
         name: cat.name,
         slug: cat.slug,
         iconName: cat.icon_name || 'Layers',
-        itemCount: 45,
+        itemCount: countMap[cat.id] || 0,
         featured: true,
-      }));
+        totalViews: viewsMap[cat.id] || 0,
+      } as any));
     }
 
     return DEFAULT_CATEGORIES;

@@ -74,7 +74,9 @@ export default function VendorStoreScreen() {
             const { data: prodRecords } = await supabase
               .from('products')
               .select('*')
-              .eq('vendor_id', id);
+              .eq('vendor_id', id)
+              .eq('is_active', true)
+              .eq('approval_status', 'approved');
 
             if (prodRecords && prodRecords.length > 0) {
               pList = prodRecords.map((p: any) => ({
@@ -109,6 +111,8 @@ export default function VendorStoreScreen() {
           const { data: allProds } = await supabase
             .from('products')
             .select('*')
+            .eq('is_active', true)
+            .eq('approval_status', 'approved')
             .limit(10);
 
           if (allProds && allProds.length > 0) {

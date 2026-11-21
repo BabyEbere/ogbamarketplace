@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cacheGet, cacheDel } from '@/lib/redis';
 
 function normalizeNigerianPhone(phone: string): string {
   let cleaned = phone.replace(/[^0-9]/g, '');
@@ -14,20 +15,55 @@ function normalizeNigerianPhone(phone: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { phoneNumber, code } = await req.json();
+    const { phoneNumber, email, code } = await req.json();
 
-    if (!phoneNumber || !code) {
-      return NextResponse.json({ success: false, message: 'Phone number and verification code are required' }, { status: 400 });
+    if ((!phoneNumber && !email) || !code) {
+      return NextResponse.json(
+        { success: false, message: 'Phone number or email and verification code are required' },
+        { status: 400 }
+      );
     }
 
-    const trimmed = code.trim();
-    if (trimmed === '123456' || trimmed === '000000') {
-      return NextResponse.json({ success: true, message: 'Verification successful' });
+    const normalizedPhone = phoneNumber ? normalizeNigerianPhone(phoneNumber) : '';
+    const targetEmail = email ? email.trim().toLowerCase() : '';
+    const key = normalizedPhone || targetEmail;
+    const trimmed = String(code).trim();
+
+    if (!/^\d{6}$/.test(trimmed)) {
+      return NextResponse.json(
+        { success: false, message: 'Please enter a valid 6-digit verification code' },
+        { status: 400 }
+      );
     }
 
-    // In local dev/testing
+    const stored = await cacheGet<{ code: string; expiresAt: number }>(`otp:${key}`);
+
+    if (!stored) {
+      return NextResponse.json(
+        { success: false, message: 'Verification code has expired or was not requested. Please request a new code.' },
+        { status: 400 }
+      );
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      await cacheDel(`otp:${key}`);
+      return NextResponse.json(
+        { success: false, message: 'Verification code has expired. Please request a new code.' },
+        { status: 400 }
+      );
+    }
+
+    if (stored.code !== trimmed) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid verification code. Please check and try again.' },
+        { status: 400 }
+      );
+    }
+
+    await cacheDel(`otp:${key}`);
     return NextResponse.json({ success: true, message: 'Verification successful' });
-  } catch (error: any) {
+  } catch (error) {
+    console.error('Verify OTP Error:', error);
     return NextResponse.json({ success: false, message: 'Verification error' }, { status: 500 });
   }
 }

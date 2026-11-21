@@ -301,7 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // If account doesn't exist, register with defaults
     const regRes = await registerWithDetails({
       fullName,
-      email: `${normalizePhoneNumber(phoneNumber)}@ogbamarketplace.com`,
+      email: `${normalizePhoneNumber(phoneNumber)}@ogbamarketplace.com.ng`,
       phoneNumber,
       community: area,
       deliveryAddress: `${area} Central`,

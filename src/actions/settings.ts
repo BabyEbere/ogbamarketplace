@@ -20,6 +20,11 @@ export interface PlatformConfig {
   verificationBadgePeriod: string;
   verificationBadgeRequirements: string;
   verificationBadgeInstructions: string;
+  // Deals of the Day Promotion
+  dealOfDayPricePerDay: string;
+  // Paystack Gateway
+  paystackPublicKey: string;
+  paystackSecretKey: string;
 }
 
 /**
@@ -28,7 +33,7 @@ export interface PlatformConfig {
 export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
   const config: PlatformConfig = {
     brevoApiKey: process.env.BREVO_API_KEY || '',
-    brevoSenderEmail: process.env.BREVO_SENDER_EMAIL || 'support@ogbamarketplace.com',
+    brevoSenderEmail: process.env.BREVO_SENDER_EMAIL || 'support@ogbamarketplace.com.ng',
     brevoSenderName: process.env.BREVO_SENDER_NAME || 'OGBA MARKET PLACE',
     commissionRate: '7.5',
     baseDeliveryFee: '1000',
@@ -41,6 +46,9 @@ export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
     verificationBadgePeriod: 'Annual (12 Months)',
     verificationBadgeRequirements: '1. Active approved vendor store in ONELGA\n2. Valid National ID (NIN) or CAC registration\n3. Minimum 5 successful deliveries with 4.5+ star rating',
     verificationBadgeInstructions: 'Pay badge verification fee into Ogba Marketplace designated settlement account or Paystack badge gateway.',
+    dealOfDayPricePerDay: '500',
+    paystackPublicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+    paystackSecretKey: process.env.PAYSTACK_SECRET_KEY || '',
   };
 
   try {
@@ -63,6 +71,9 @@ export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
         if (row.key === 'badge_period' && row.value) config.verificationBadgePeriod = row.value;
         if (row.key === 'badge_requirements' && row.value) config.verificationBadgeRequirements = row.value;
         if (row.key === 'badge_instructions' && row.value) config.verificationBadgeInstructions = row.value;
+        if (row.key === 'deal_price_per_day' && row.value) config.dealOfDayPricePerDay = row.value;
+        if (row.key === 'paystack_public_key' && row.value) config.paystackPublicKey = row.value;
+        if (row.key === 'paystack_secret_key' && row.value) config.paystackSecretKey = row.value;
       });
     }
   } catch (err) {
@@ -73,7 +84,7 @@ export async function getPlatformSettingsAction(): Promise<PlatformConfig> {
 }
 
 /**
- * Save Brevo, R2 & Platform settings into database table `platform_settings`
+ * Save Brevo, R2, Deals & Paystack settings into database table `platform_settings`
  */
 export async function savePlatformSettingsAction(params: {
   brevoApiKey?: string;
@@ -90,6 +101,9 @@ export async function savePlatformSettingsAction(params: {
   verificationBadgePeriod?: string;
   verificationBadgeRequirements?: string;
   verificationBadgeInstructions?: string;
+  dealOfDayPricePerDay?: string;
+  paystackPublicKey?: string;
+  paystackSecretKey?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
@@ -137,6 +151,15 @@ export async function savePlatformSettingsAction(params: {
     }
     if (params.verificationBadgeInstructions !== undefined) {
       rowsToUpsert.push({ key: 'badge_instructions', value: params.verificationBadgeInstructions.trim(), updated_at: now });
+    }
+    if (params.dealOfDayPricePerDay !== undefined) {
+      rowsToUpsert.push({ key: 'deal_price_per_day', value: params.dealOfDayPricePerDay.trim(), updated_at: now });
+    }
+    if (params.paystackPublicKey !== undefined) {
+      rowsToUpsert.push({ key: 'paystack_public_key', value: params.paystackPublicKey.trim(), updated_at: now });
+    }
+    if (params.paystackSecretKey !== undefined) {
+      rowsToUpsert.push({ key: 'paystack_secret_key', value: params.paystackSecretKey.trim(), updated_at: now });
     }
 
     if (rowsToUpsert.length > 0) {

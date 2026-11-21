@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'Ogba Marketplace Initiative' }],
   creator: 'Ogba Market Place',
   publisher: 'Ogba Market Place',
-  metadataBase: new URL('https://ogbamarketplace.com'),
+  metadataBase: new URL('https://ogbamarketplace.com.ng'),
   alternates: {
     canonical: '/',
   },
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'OGBA MARKET PLACE | Local Community Marketplace',
     description: 'Shop fresh local produce, electronics, fashion and building materials with fast same-day delivery across Ogba & Egi.',
-    url: 'https://ogbamarketplace.com',
+    url: 'https://ogbamarketplace.com.ng',
     siteName: 'OGBA MARKET PLACE',
     images: [
       {

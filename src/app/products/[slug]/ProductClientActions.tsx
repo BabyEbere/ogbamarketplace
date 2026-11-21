@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Zap, Plus, Minus, Check } from 'lucide-react';
 import { Product } from '@/types/marketplace';
 import { useCart } from '@/context/CartContext';
+import { recordProductViewAction } from '@/actions/products';
 
 interface ProductClientActionsProps {
   product: Product;
@@ -13,6 +14,23 @@ export default function ProductClientActions({ product }: ProductClientActionsPr
   const [quantity, setQuantity] = useState<number>(1);
   const [isAdded, setIsAdded] = useState<boolean>(false);
   const { addToCart, openCart } = useCart();
+
+  // Track product view and popular department opens
+  useEffect(() => {
+    if (product?.id) {
+      recordProductViewAction(product.id).catch(() => {});
+    }
+
+    try {
+      const stored = localStorage.getItem('ogba_category_views');
+      const viewsMap = stored ? JSON.parse(stored) : {};
+      const catKey = product.categorySlug || 'all';
+      viewsMap[catKey] = (viewsMap[catKey] || 0) + 1;
+      localStorage.setItem('ogba_category_views', JSON.stringify(viewsMap));
+    } catch (e) {
+      // storage unavailable
+    }
+  }, [product?.id, product?.categorySlug]);
 
   const handleIncrement = () => {
     if (quantity < (product.stock || 99)) {

@@ -2,19 +2,23 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { CartItem } from '@/types/marketplace';
+import { calculateDeliveryFee, DeliveryArea } from '@/constants/delivery';
 
 export async function createOrderAction(params: {
   customerId: string;
   items: CartItem[];
   deliveryAddress: string;
-  deliveryArea: 'Omoku' | 'Egi' | 'Obrikom' | 'Erema';
+  deliveryArea: DeliveryArea;
   phone: string;
   paymentMethod: 'paystack' | 'wallet';
+  paymentReference?: string;
 }) {
   const subtotal = params.items.reduce((acc, i) => acc + i.product.price * i.quantity, 0);
-  const deliveryFee = subtotal >= 50000 ? 0 : 1500;
+  const deliveryFee = calculateDeliveryFee(subtotal, params.deliveryArea);
   const totalAmount = subtotal + deliveryFee;
-  const orderRef = `OGB-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+  const orderRef =
+    params.paymentReference ||
+    `OGB-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
   try {
     const supabase = await createClient();
@@ -56,5 +60,51 @@ export async function createOrderAction(params: {
       deliveryFee,
       message: 'Order placed successfully (Simulated mode).',
     };
+  }
+}
+
+export async function getCustomerOrdersAction(params: {
+  customerId?: string;
+  phone?: string;
+}) {
+  try {
+    const supabase = await createClient();
+    let query = supabase
+      .from('orders')
+      .select('id, order_reference, total_amount, subtotal_amount, delivery_fee, status, payment_status, delivery_address, delivery_area, delivery_phone, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (params.customerId && !params.customerId.startsWith('web-')) {
+      query = query.eq('customer_id', params.customerId);
+    } else if (params.phone) {
+      query = query.eq('delivery_phone', params.phone);
+    } else {
+      return [];
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+export async function lookupOrderByRefAction(orderReference: string) {
+  try {
+    const cleanRef = orderReference.trim().toUpperCase();
+    if (!cleanRef) return null;
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, order_reference, total_amount, subtotal_amount, delivery_fee, status, payment_status, delivery_address, delivery_area, delivery_phone, created_at')
+      .eq('order_reference', cleanRef)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
   }
 }

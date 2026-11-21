@@ -23,6 +23,7 @@ import {
   Sparkles,
   Tag,
   CheckCircle,
+  Flame,
 } from 'lucide-react';
 
 import Image from 'next/image';
@@ -43,6 +44,7 @@ const adminNavItems: NavItem[] = [
   { name: 'Orders Dispatch', href: '/control-omp/orders', icon: ShoppingBag, badge: 'Active' },
   { name: 'Products Catalog', href: '/control-omp/products', icon: Package },
   { name: 'Product Approvals', href: '/control-omp/products/approvals', icon: CheckCircle, badgeColor: 'bg-amber-500' },
+  { name: 'Marketing & Campaigns', href: '/control-omp/marketing', icon: Flame, badge: 'Emails', badgeColor: 'bg-emerald-500' },
   { name: 'Market Categories', href: '/control-omp/categories', icon: Sparkles },
   { name: 'Brands Directory', href: '/control-omp/brands', icon: Tag, badge: 'R2' },
   { name: 'KYC & Verifications', href: '/control-omp/kyc', icon: ShieldCheck, badgeColor: 'bg-amber-500' },
@@ -54,6 +56,7 @@ const vendorNavItems: NavItem[] = [
   { name: 'Dashboard', href: '/vendor', icon: LayoutDashboard },
   { name: 'Store Orders', href: '/vendor/orders', icon: ShoppingBag, badge: '5 New' },
   { name: 'My Products', href: '/vendor/products', icon: Package },
+  { name: 'Marketing & Deals', href: '/vendor/marketing', icon: Flame, badge: 'Hot', badgeColor: 'bg-amber-500' },
   { name: 'Earnings & Wallet', href: '/vendor/wallet', icon: Wallet },
   { name: 'KYC Verification', href: '/vendor/kyc', icon: ShieldCheck },
   { name: 'Store Profile', href: '/vendor/settings', icon: Settings },

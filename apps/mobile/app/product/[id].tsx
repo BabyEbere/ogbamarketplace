@@ -184,6 +184,8 @@ export default function ProductDescriptionScreen() {
           const { data: similarData } = await supabase
             .from('products')
             .select('id, title, price, images, vendor:vendors(business_name)')
+            .eq('is_active', true)
+            .eq('approval_status', 'approved')
             .neq('id', prodData.id)
             .limit(6);
 
@@ -259,7 +261,7 @@ export default function ProductDescriptionScreen() {
     if (!product) return;
     try {
       await Share.share({
-        message: `Check out "${product.title}" for ₦${product.price.toLocaleString()} on OGBA MARKET PLACE! Delivered same-day across Omoku & Egi: https://ogbamarketplace.com/products/${product.id}`,
+        message: `Check out "${product.title}" for ₦${product.price.toLocaleString()} on OGBA MARKET PLACE! Delivered same-day across Omoku & Egi: https://ogbamarketplace.com.ng/products/${product.id}`,
       });
     } catch (error) {
       console.warn('Share error:', error);

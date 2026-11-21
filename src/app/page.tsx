@@ -18,7 +18,6 @@ import HeroBanner from '@/components/HeroBanner';
 import CategoryGrid from '@/components/CategoryGrid';
 import DealsSection from '@/components/DealsSection';
 import ProductCard from '@/components/ProductCard';
-import VendorShowcase from '@/components/VendorShowcase';
 import CommunityNoticeBoard from '@/components/CommunityNoticeBoard';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import AppLoader from '@/components/AppLoader';
@@ -174,7 +173,7 @@ function HomePageContent() {
         )}
 
         {/* Categories Bar (Directly below Hero on Mobile & Desktop) */}
-        <section className="container" style={{ margin: '0.5rem auto 1rem' }}>
+        <section id="categories" className="container" style={{ margin: '0.5rem auto 1rem' }}>
           <CategoryGrid
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
@@ -321,12 +320,9 @@ function HomePageContent() {
           </section>
         )}
 
-        {/* Vendors and Community Notices Split Section */}
-        <section id="vendors" className="container">
-          <div className="layout-split-grid">
-            <VendorShowcase vendors={vendorsList} />
-            <CommunityNoticeBoard />
-          </div>
+        {/* Community Announcements & Market Notices */}
+        <section className="container" style={{ margin: '1.5rem auto' }}>
+          <CommunityNoticeBoard />
         </section>
       </main>
 
@@ -336,10 +332,6 @@ function HomePageContent() {
         onSelectTab={(tab) => {
           setActiveMobileTab(tab);
           if (tab === 'home') setSelectedCategory('all');
-          if (tab === 'categories') {
-            const el = document.querySelector('.category-icon-cards');
-            el?.scrollIntoView({ behavior: 'smooth' });
-          }
         }}
       />
 

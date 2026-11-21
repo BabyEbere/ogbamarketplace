@@ -89,8 +89,12 @@ export default function MobileHomeScreen() {
             description,
             stock_quantity,
             is_deal_of_day,
+            approval_status,
+            is_active,
             vendor:vendors(business_name, market_location)
           `)
+          .eq('is_active', true)
+          .eq('approval_status', 'approved')
           .limit(40);
 
         if (!error && data && data.length > 0 && isMounted) {

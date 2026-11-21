@@ -74,7 +74,7 @@ export interface AdminVendorKYC {
   ownerName: string;
   phone: string;
   marketLocation: string;
-  area: 'Omoku' | 'Egi' | 'Obrikom' | 'Erema';
+  area: 'Omoku' | 'Egi' | 'Obrikom' | 'Erema' | string;
   bankName: string;
   bankAccountNumber: string;
   status: 'pending' | 'verified' | 'rejected';
@@ -82,6 +82,8 @@ export interface AdminVendorKYC {
   productsCount: number;
   totalSales: number;
   rating: number;
+  kycIdCardUrl?: string | null;
+  kycBusinessProofUrl?: string | null;
 }
 
 export interface AdminDirectoryUser {

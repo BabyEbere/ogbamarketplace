@@ -75,3 +75,39 @@ ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS category_name VARCHAR(100);
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS brand_id UUID REFERENCES public.brands(id) ON DELETE SET NULL;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS brand_name VARCHAR(150);
 
+-- 7. ENSURE VENDORS TABLE HAS FULL RLS POLICIES FOR INSERT, UPDATE, DELETE
+DROP POLICY IF EXISTS "Public can view verified vendors" ON public.vendors;
+DROP POLICY IF EXISTS "Allow all on vendors" ON public.vendors;
+CREATE POLICY "Allow all on vendors" ON public.vendors FOR ALL USING (true) WITH CHECK (true);
+
+-- 8. EXPLICITLY ENSURE VENDOR ROW EXISTS FOR talkwella@gmail.com
+INSERT INTO public.vendors (
+    user_id,
+    business_name,
+    slug,
+    market_location,
+    area,
+    kyc_status,
+    is_verified,
+    rating,
+    review_count,
+    total_sales
+)
+SELECT 
+    id,
+    'Ebere Gideon Emmanuel Store',
+    'ebere-gideon-emmanuel-store',
+    COALESCE(delivery_address, 'New Elf Road, Ogbogu'),
+    COALESCE(area, 'Other'),
+    'verified',
+    true,
+    5.0,
+    0,
+    0
+FROM public.users
+WHERE email = 'talkwella@gmail.com'
+ON CONFLICT (user_id) DO UPDATE SET
+    business_name = EXCLUDED.business_name,
+    kyc_status = 'verified',
+    is_verified = true;
+

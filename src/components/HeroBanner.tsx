@@ -51,6 +51,23 @@ export default function HeroBanner({ products, onAddToCart }: HeroBannerProps) {
     ? Math.round(((currentProduct.compareAtPrice - currentProduct.price) / currentProduct.compareAtPrice) * 100)
     : 0;
 
+  const truncateText = (text?: string, maxChars: number = 90) => {
+    if (!text) return 'Quality guaranteed local item sourced directly from verified community merchants.';
+    const clean = text
+      .replace(/<[^>]*>?/gm, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/[#*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (clean.length <= maxChars) return clean;
+    return clean.slice(0, maxChars).trim() + '...';
+  };
+
   return (
     <section className="hero-section">
       <div className="container">
@@ -74,6 +91,7 @@ export default function HeroBanner({ products, onAddToCart }: HeroBannerProps) {
                   alt={currentProduct.title}
                   fill
                   priority
+                  loading="eager"
                   sizes="(max-width: 768px) 140px, 400px"
                   style={{ objectFit: 'cover' }}
                 />
@@ -107,13 +125,13 @@ export default function HeroBanner({ products, onAddToCart }: HeroBannerProps) {
                 href={`/products/${currentProduct.slug || currentProduct.id}`} 
                 className="ad-title-link"
               >
-                <h2 className="ad-product-title">
+                <h2 className="ad-product-title" title={currentProduct.title}>
                   {currentProduct.title}
                 </h2>
               </Link>
 
               <p className="ad-product-description mobile-hidden">
-                {currentProduct.description || 'Quality guaranteed local item sourced directly from verified community merchants.'}
+                {truncateText(currentProduct.description)}
               </p>
 
               <div className="ad-price-details-row">

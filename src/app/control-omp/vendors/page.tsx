@@ -18,11 +18,13 @@ import {
   Phone,
   Mail,
   MapPin,
+  Trash2,
 } from 'lucide-react';
 import {
   getAdminVendorsFromDB,
   toggleVendorApprovalToSellAction,
   reviewVendorKYCAction,
+  deleteAdminVendorAction,
   AdminVendorRecord,
 } from '@/actions/admin';
 
@@ -35,6 +37,7 @@ export default function AdminVendorsPage() {
 
   // Review KYC Modal State
   const [selectedVendorForKYC, setSelectedVendorForKYC] = useState<AdminVendorRecord | null>(null);
+  const [vendorToDelete, setVendorToDelete] = useState<AdminVendorRecord | null>(null);
 
   const loadVendors = async () => {
     try {
@@ -120,9 +123,32 @@ export default function AdminVendorsPage() {
     }
   };
 
+  const handleDeleteVendor = async () => {
+    if (!vendorToDelete) return;
+    setActionLoadingId(vendorToDelete.id);
+    try {
+      const res = await deleteAdminVendorAction({
+        vendorId: vendorToDelete.id,
+        userId: vendorToDelete.userId,
+      });
+      if (res.success) {
+        showToast(res.message);
+        setVendors((prev) => prev.filter((v) => v.id !== vendorToDelete.id));
+        setVendorToDelete(null);
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast('Error deleting vendor store.', 'error');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const filteredVendors = vendors.filter((v) =>
     v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    v.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.phone.includes(searchTerm)
   );
@@ -136,8 +162,8 @@ export default function AdminVendorsPage() {
     <div className="flex-1 pb-16 bg-slate-50">
       <DashboardHeader
         title="Vendors & Merchants HQ"
-        subtitle="Live Supabase Database: manage merchant store approval to sell, KYC document reviews, and verified badges."
-        liveStats={{ label: 'Stores in DB', value: `${vendors.length} Registered` }}
+        subtitle="Manage merchant store approvals to sell, KYC document reviews, and verified badges."
+        liveStats={{ label: 'Active Stores', value: `${vendors.length} Registered` }}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-6">
@@ -157,12 +183,12 @@ export default function AdminVendorsPage() {
           </div>
         )}
 
-        {/* Top Vendor Metrics from Live DB */}
+        {/* Top Vendor Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Live Stores</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Stores</span>
             <div className="mt-2 text-3xl font-black text-slate-900">{vendors.length}</div>
-            <p className="text-xs text-slate-500 mt-1">Fetched directly from Supabase</p>
+            <p className="text-xs text-slate-500 mt-1">Verified merchant storefronts</p>
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
@@ -204,12 +230,12 @@ export default function AdminVendorsPage() {
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh DB</span>
+              <span>Refresh</span>
             </button>
           </div>
         </div>
 
-        {/* Vendors Live Table */}
+        {/* Vendors Directory Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -230,7 +256,7 @@ export default function AdminVendorsPage() {
                     <td colSpan={7} className="text-center py-12 text-slate-400 text-xs font-bold">
                       <div className="flex items-center justify-center gap-2">
                         <RefreshCw className="w-4 h-4 animate-spin text-forest-850" />
-                        <span>Querying Supabase vendors table...</span>
+                        <span>Loading merchant directory...</span>
                       </div>
                     </td>
                   </tr>
@@ -365,6 +391,16 @@ export default function AdminVendorsPage() {
                               <ShieldCheck className="w-3.5 h-3.5" />
                               <span>KYC</span>
                             </button>
+
+                            {/* Delete Store Button */}
+                            <button
+                              onClick={() => setVendorToDelete(vendor)}
+                              disabled={isBusy}
+                              title="Permanently Delete Storefront"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -464,6 +500,45 @@ export default function AdminVendorsPage() {
                     </button>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Delete Vendor Confirmation Modal */}
+        {vendorToDelete && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="p-2.5 bg-red-100 rounded-xl">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Delete Vendor Store</h3>
+                  <p className="text-xs text-slate-500">This action will remove the store and its uploaded catalog.</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                Are you sure you want to permanently delete <strong>{vendorToDelete.name}</strong> (Owner: {vendorToDelete.owner}, {vendorToDelete.email})?
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setVendorToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={actionLoadingId === vendorToDelete.id}
+                  onClick={handleDeleteVendor}
+                  className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  {actionLoadingId === vendorToDelete.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Confirm Delete</span>
+                </button>
               </div>
             </div>
           </div>

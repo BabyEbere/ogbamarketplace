@@ -23,6 +23,7 @@ import { registerVendorWebAction } from '@/actions/vendors';
 import { getActiveCommunitiesAction, CommunityRecord } from '@/actions/communities';
 import { getCategories } from '@/actions/categories';
 import { getPayoutBanksAction, PayoutBank } from '@/actions/banks';
+import CustomSelect from '@/components/CustomSelect';
 import { Category } from '@/types/marketplace';
 
 export default function VendorRegisterPage() {
@@ -303,17 +304,19 @@ export default function VendorRegisterPage() {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Community / Area in ONELGA *
                 </label>
-                <select
+                <CustomSelect
+                  id="vendor-community"
+                  name="area"
                   value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-forest-800"
-                >
-                  {communities.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} {c.lga ? `(${c.lga})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setArea}
+                  placeholder="Select community"
+                  icon={<MapPin size={15} />}
+                  options={communities.map((c) => ({
+                    value: c.name,
+                    label: c.name,
+                    sublabel: c.lga || undefined,
+                  }))}
+                />
                 <p className="text-[10px] text-slate-400 mt-1">Configured from Live Site Settings</p>
               </div>
 
@@ -341,17 +344,18 @@ export default function VendorRegisterPage() {
                 <span>Primary Merchandise Department *</span>
                 <span className="text-[10px] text-forest-800 font-bold lowercase">from database categories</span>
               </label>
-              <select
+              <CustomSelect
+                id="vendor-category"
+                name="categoryId"
                 value={selectedCategoryId}
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-forest-800"
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedCategoryId}
+                placeholder="Select department"
+                icon={<Layers size={15} />}
+                options={categories.map((cat) => ({
+                  value: cat.id,
+                  label: cat.name,
+                }))}
+              />
             </div>
 
             {/* ID / NIN Verification Reference */}
@@ -383,17 +387,18 @@ export default function VendorRegisterPage() {
                   <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
                     Select Bank (Supported by Admin)
                   </label>
-                  <select
+                  <CustomSelect
+                    id="vendor-bank"
+                    name="bankName"
                     value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-forest-800"
-                  >
-                    {banks.map((b) => (
-                      <option key={b.id} value={b.name}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setBankName}
+                    placeholder="Select bank"
+                    icon={<CreditCard size={15} />}
+                    options={banks.map((b) => ({
+                      value: b.name,
+                      label: b.name,
+                    }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">

@@ -94,6 +94,39 @@ export async function getVendorProfileById(vendorIdOrUserId: string): Promise<Ve
     const { data: vendor, error: vErr } = await query.maybeSingle();
 
     if (vErr || !vendor) {
+      if (isUuid) {
+        const { data: uData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', vendorIdOrUserId)
+          .maybeSingle();
+
+        if (uData && (uData.role === 'vendor' || uData.role === 'admin')) {
+          const cleanName = uData.full_name || uData.email?.split('@')[0] || 'Merchant';
+          const cleanSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+          return {
+            id: uData.id,
+            userId: uData.id,
+            businessName: `${cleanName}'s Store`,
+            slug: `${cleanSlug}-${uData.id.slice(0, 4)}`,
+            marketLocation: uData.delivery_address || `${uData.area || 'Omoku'}, Rivers State`,
+            area: uData.area || 'Omoku',
+            rating: 5.0,
+            reviewCount: 0,
+            totalSales: 0,
+            walletBalance: Number(uData.wallet_balance) || 0,
+            isApprovedToSell: Boolean(uData.is_active),
+            kycStatus: 'pending',
+            isVerified: false,
+            bankName: '',
+            accountNumber: '',
+            accountName: '',
+            ownerName: uData.full_name || 'Store Owner',
+            ownerPhone: uData.phone_number || '',
+            ownerEmail: uData.email || '',
+          };
+        }
+      }
       return null;
     }
 
@@ -153,27 +186,29 @@ export async function getCurrentVendorProfile(): Promise<VendorProfileData | nul
           if (profile) return profile;
         }
       } catch (e) {
-        // parse error, proceed to fallback
+        // invalid session cookie
       }
     }
 
-    // Fallback: load first vendor from DB so merchant dashboard is functional immediately
-    const supabase = await createClient();
-    const { data: firstVendor } = await supabase
-      .from('vendors')
-      .select('id')
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (firstVendor && firstVendor.id) {
-      return await getVendorProfileById(firstVendor.id);
-    }
-
+    // Strictly require authentication - do not leak arbitrary stores to unauthenticated users
     return null;
   } catch (err) {
     console.error('Error getting current vendor profile:', err);
     return null;
+  }
+}
+
+/**
+ * Log out vendor session on Web
+ */
+export async function logoutVendorWebAction() {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete(VENDOR_SESSION_COOKIE);
+    revalidatePath('/vendor');
+    return { success: true };
+  } catch (err) {
+    return { success: false };
   }
 }
 
@@ -384,7 +419,7 @@ export async function registerVendorWebAction(params: {
         .insert({
           full_name: params.fullName.trim(),
           phone_number: cleanPhone,
-          email: params.email?.trim() || `${slug}@ogbamarketplace.com`,
+          email: params.email?.trim() || `${slug}@ogbamarketplace.com.ng`,
           role: 'vendor',
           area: params.area,
           delivery_address: params.marketLocation.trim(),
@@ -480,29 +515,84 @@ export async function loginVendorWebAction(params: {
   try {
     const supabase = await createClient();
     const identifier = params.phoneOrEmail.trim();
+    const isEmail = identifier.includes('@');
+
+    let userQuery = supabase
+      .from('users')
+      .select('id, full_name, phone_number, email, role, is_active');
+
+    if (isEmail) {
+      userQuery = userQuery.eq('email', identifier.toLowerCase());
+    } else {
+      const digits = identifier.replace(/[^0-9]/g, '');
+      const normalized = digits.startsWith('0')
+        ? '234' + digits.slice(1)
+        : digits.length === 10
+        ? '234' + digits
+        : digits;
+      const localFormat = normalized.startsWith('234') ? '0' + normalized.slice(3) : identifier;
+      userQuery = userQuery.or(
+        `phone_number.eq.${identifier},phone_number.eq.${normalized},phone_number.eq.+${normalized},phone_number.eq.${localFormat}`
+      );
+    }
 
     // Find user
-    const { data: user, error: uErr } = await supabase
-      .from('users')
-      .select('id, full_name, phone_number, email, role, is_active')
-      .or(`phone_number.eq.${identifier},email.eq.${identifier}`)
-      .maybeSingle();
+    const { data: user, error: uErr } = await userQuery.maybeSingle();
 
     if (uErr || !user) {
       return { success: false, message: 'Account not found with this phone number or email.' };
     }
 
     // Find vendor profile
-    const { data: vendor, error: vErr } = await supabase
+    let { data: vendor, error: vErr } = await supabase
       .from('vendors')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (vErr || !vendor) {
+    if (!vendor) {
+      if (user.role === 'vendor') {
+        // Auto-provision storefront for user registered as vendor
+        const cleanName = user.full_name || user.email?.split('@')[0] || 'Merchant';
+        const cleanSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const { data: createdVendor } = await supabase
+          .from('vendors')
+          .insert({
+            user_id: user.id,
+            business_name: `${cleanName}'s Store`,
+            slug: `${cleanSlug}-${user.id.slice(0, 4)}`,
+            market_location: 'Omoku Main Market, Rivers State',
+            area: 'Omoku',
+            kyc_status: 'pending',
+            is_verified: false,
+            rating: 5.0,
+            review_count: 0,
+            total_sales: 0,
+          })
+          .select()
+          .single();
+
+        vendor = createdVendor;
+        if (!vendor) {
+          vendor = {
+            id: user.id,
+            user_id: user.id,
+            business_name: `${cleanName}'s Store`,
+            slug: `${cleanSlug}-${user.id.slice(0, 4)}`,
+          };
+        }
+      } else {
+        return {
+          success: false,
+          message: 'No registered vendor storefront found for this user account. Please apply as a vendor.',
+        };
+      }
+    }
+
+    if (!vendor) {
       return {
         success: false,
-        message: 'No registered vendor storefront found for this user account. Please apply as a vendor.',
+        message: 'Could not access or initialize vendor storefront.',
       };
     }
 

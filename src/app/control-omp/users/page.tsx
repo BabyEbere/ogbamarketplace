@@ -20,8 +20,9 @@ import {
   ShoppingBag,
   Bike,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
-import { getAdminUsers, toggleUserStatusAction } from '@/actions/admin';
+import { getAdminUsers, toggleUserStatusAction, deleteAdminUserAction } from '@/actions/admin';
 import { AdminDirectoryUser } from '@/types/admin';
 
 export default function AdminUsersPage() {
@@ -31,6 +32,7 @@ export default function AdminUsersPage() {
   const [filterRole, setFilterRole] = useState('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<AdminDirectoryUser | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -74,6 +76,25 @@ export default function AdminUsersPage() {
       }
     } catch (e: any) {
       showToast('Error updating status in database.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setUpdatingId(userToDelete.id);
+    try {
+      const res = await deleteAdminUserAction(userToDelete.id);
+      if (res.success) {
+        showToast(res.message);
+        setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+        setUserToDelete(null);
+      } else {
+        showToast(res.message);
+      }
+    } catch (e: any) {
+      showToast('Error deleting user from database.');
     } finally {
       setUpdatingId(null);
     }
@@ -130,8 +151,8 @@ export default function AdminUsersPage() {
 
       <DashboardHeader
         title="Users Directory"
-        subtitle="Live registry of all shoppers, verified vendors, and dispatch riders queried directly from Supabase."
-        liveStats={{ label: 'Total in DB', value: `${totalRegistered} Users` }}
+        subtitle="Directory of platform shoppers, verified merchants, and logistics personnel."
+        liveStats={{ label: 'Total Accounts', value: `${totalRegistered} Users` }}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-6">
@@ -207,7 +228,7 @@ export default function AdminUsersPage() {
             <button
               onClick={loadUsers}
               disabled={loading}
-              title="Refresh from Supabase"
+              title="Refresh"
               className="p-2 text-slate-500 hover:text-forest-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-forest-800' : ''}`} />
@@ -245,7 +266,7 @@ export default function AdminUsersPage() {
                     <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RefreshCw className="w-6 h-6 animate-spin text-forest-800" />
-                        <span className="text-xs font-semibold">Querying live users from Supabase...</span>
+                        <span className="text-xs font-semibold">Loading user accounts...</span>
                       </div>
                     </td>
                   </tr>
@@ -347,24 +368,35 @@ export default function AdminUsersPage() {
                           </a>
 
                           {user.role !== 'Admin' && (
-                            <button
-                              disabled={updatingId === user.id}
-                              onClick={() => handleToggleStatus(user)}
-                              title={user.status === 'Active' ? 'Suspend User in Database' : 'Reactivate User in Database'}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                user.status === 'Active'
-                                  ? 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                                  : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                              }`}
-                            >
-                              {updatingId === user.id ? (
-                                <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
-                              ) : user.status === 'Active' ? (
-                                <UserX className="w-4 h-4" />
-                              ) : (
-                                <UserCheck className="w-4 h-4" />
-                              )}
-                            </button>
+                            <>
+                              <button
+                                disabled={updatingId === user.id}
+                                onClick={() => handleToggleStatus(user)}
+                                title={user.status === 'Active' ? 'Suspend User in Database' : 'Reactivate User in Database'}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  user.status === 'Active'
+                                    ? 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                    : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                }`}
+                              >
+                                {updatingId === user.id ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+                                ) : user.status === 'Active' ? (
+                                  <UserX className="w-4 h-4" />
+                                ) : (
+                                  <UserCheck className="w-4 h-4" />
+                                )}
+                              </button>
+
+                              <button
+                                disabled={updatingId === user.id}
+                                onClick={() => setUserToDelete(user)}
+                                title="Permanently Delete User"
+                                className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -375,6 +407,46 @@ export default function AdminUsersPage() {
             </table>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {userToDelete && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="p-2.5 bg-red-100 rounded-xl">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Delete User Account</h3>
+                  <p className="text-xs text-slate-500">This action will remove the user and any linked vendor store.</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                Are you sure you want to permanently delete <strong>{userToDelete.name}</strong> ({userToDelete.email})?
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setUserToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={updatingId === userToDelete.id}
+                  onClick={handleDeleteUser}
+                  className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  {updatingId === userToDelete.id ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Confirm Delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

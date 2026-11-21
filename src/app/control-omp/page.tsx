@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import {
@@ -8,78 +8,92 @@ import {
   Store,
   Bike,
   ShoppingBag,
-  TrendingUp,
   Smartphone,
   Globe,
-  ArrowUpRight,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
   ShieldCheck,
   CreditCard,
   DollarSign,
   ChevronRight,
   Activity,
+  RefreshCw,
 } from 'lucide-react';
+import {
+  getControlDashboardSnapshotAction,
+  ControlDashboardSnapshot,
+} from '@/actions/admin';
+
+const EMPTY_SNAPSHOT: ControlDashboardSnapshot = {
+  usersCount: 0,
+  usersActiveToday: 0,
+  ridersOnlineNow: 0,
+  ridersTotal: 0,
+  vendorsActiveNow: 0,
+  vendorsRegistered: 0,
+  appUsersPercent: 0,
+  webUsersPercent: 0,
+  totalOrders: 0,
+  totalRevenue: 0,
+  pendingPayoutsAmount: 0,
+  kycPendingCount: 0,
+  pendingProductApprovalsCount: 0,
+  zoneCoverage: [],
+  recentOrders: [],
+};
 
 export default function AdminOverviewPage() {
-  const [timeframe, setTimeframe] = useState('today');
+  const [snapshot, setSnapshot] = useState<ControlDashboardSnapshot>(EMPTY_SNAPSHOT);
+  const [loading, setLoading] = useState(true);
 
-  // Real-time metrics
-  const liveStats = {
-    usersOnlineNow: 142,
-    usersActiveToday: 1894,
-    ridersOnlineNow: 28,
-    ridersActiveToday: 45,
-    vendorsActiveNow: 62,
-    vendorsRegistered: 118,
-    appUsersPercent: 68,
-    webUsersPercent: 32,
-    todayOrders: 186,
-    todayRevenue: '₦1,842,500',
-    pendingPayouts: '₦340,000',
-    kycPending: 3,
-  };
+  const loadSnapshot = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getControlDashboardSnapshotAction();
+      setSnapshot(data);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const recentOrders = [
-    { id: 'ORD-9821', customer: 'Chinedu Eze', vendor: 'Mama Peace Kitchen', items: '2x Egusi Soup & Semo', amount: '₦5,600', rider: 'Emeka (Bike 04)', status: 'In Transit', time: '4 mins ago', channel: 'Mobile App' },
-    { id: 'ORD-9820', customer: 'Blessing Jumbo', vendor: 'De-Kings Farm Fresh', items: '1x Live Local Fowl + Snails', amount: '₦18,500', rider: 'Tari (Bike 11)', status: 'Delivered', time: '12 mins ago', channel: 'Mobile App' },
-    { id: 'ORD-9819', customer: 'Engr. Nnamdi', vendor: 'Ogba Prime Electronics', items: '1x 20,000mAh Powerbank', amount: '₦14,000', rider: 'Pending Assignment', status: 'Pending Dispatch', time: '19 mins ago', channel: 'Web Browser' },
-    { id: 'ORD-9818', customer: 'Ifeoma Clark', vendor: 'Sweet Tooth Bakery', items: 'Custom Birthday Cake', amount: '₦22,000', rider: 'Lucky (Bike 02)', status: 'In Transit', time: '28 mins ago', channel: 'Mobile App' },
-    { id: 'ORD-9817', customer: 'Dr. Kelechi', vendor: 'Obrikom Mega Pharmacy', items: 'Essential First Aid & Vitamins', amount: '₦9,800', rider: 'Uche (Bike 09)', status: 'Delivered', time: '41 mins ago', channel: 'Web Browser' },
-  ];
-
-  const zoneRiders = [
-    { zone: 'Omoku Central Market', active: 14, total: 18, status: 'High Demand' },
-    { zone: 'Egi Oil Gate & Obagi', active: 6, total: 8, status: 'Normal' },
-    { zone: 'Obrikom Gas Plant Rd', active: 5, total: 7, status: 'Normal' },
-    { zone: 'Erema & Ahoada Link', active: 3, total: 5, status: 'Moderate' },
-  ];
+  useEffect(() => {
+    loadSnapshot();
+  }, [loadSnapshot]);
 
   return (
     <div className="flex-1 pb-16 bg-slate-50">
       <DashboardHeader
         title="Admin Control Center"
-        subtitle="Live telemetry and market activity across Omoku, Egi, and ONELGA communities."
-        liveStats={{ label: 'Total Live Users', value: `${liveStats.usersOnlineNow} Active Now` }}
+        subtitle="Live database metrics and market activity across ONELGA communities."
+        liveStats={{ label: 'Registered Users', value: `${snapshot.usersCount} Total` }}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-6">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={loadSnapshot}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>{loading ? 'Refreshing...' : 'Refresh Live Data'}</span>
+          </button>
+        </div>
+
         {/* Live Pulse Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-          {/* Card 1: Users Pulse */}
+          {/* Card 1: Users */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:border-forest-700/50 transition-all duration-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Live Shoppers</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Registered Users</span>
               <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Realtime
+                Live DB
               </span>
             </div>
             <div className="mt-3 flex items-baseline justify-between">
               <div>
-                <span className="text-3xl font-black text-slate-900 tracking-tight">{liveStats.usersOnlineNow}</span>
-                <span className="text-xs text-slate-500 font-medium ml-1.5">online now</span>
+                <span className="text-3xl font-black text-slate-900 tracking-tight">{snapshot.usersCount}</span>
+                <span className="text-xs text-slate-500 font-medium ml-1.5">accounts</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-forest-50 text-forest-800 flex items-center justify-center font-bold">
                 <Users className="w-5 h-5" />
@@ -87,35 +101,34 @@ export default function AdminOverviewPage() {
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
               <span>Active today:</span>
-              <strong className="text-slate-900 font-bold">{liveStats.usersActiveToday.toLocaleString()} users</strong>
+              <strong className="text-slate-900 font-bold">{snapshot.usersActiveToday} users</strong>
             </div>
           </div>
 
-          {/* Card 2: Riders Pulse */}
+          {/* Card 2: Riders */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:border-forest-700/50 transition-all duration-200">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Delivery Fleet</span>
               <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Riders
               </span>
             </div>
             <div className="mt-3 flex items-baseline justify-between">
               <div>
-                <span className="text-3xl font-black text-slate-900 tracking-tight">{liveStats.ridersOnlineNow}</span>
-                <span className="text-xs text-slate-500 font-medium ml-1.5">on duty now</span>
+                <span className="text-3xl font-black text-slate-900 tracking-tight">{snapshot.ridersOnlineNow}</span>
+                <span className="text-xs text-slate-500 font-medium ml-1.5">online now</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-forest-50 text-forest-800 flex items-center justify-center font-bold">
                 <Bike className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-              <span>Active today:</span>
-              <strong className="text-slate-900 font-bold">{liveStats.ridersActiveToday} / 50 fleet</strong>
+              <span>Total registered:</span>
+              <strong className="text-slate-900 font-bold">{snapshot.ridersTotal} riders</strong>
             </div>
           </div>
 
-          {/* Card 3: Active Vendors */}
+          {/* Card 3: Vendors */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:border-forest-700/50 transition-all duration-200">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Open Vendors</span>
@@ -125,7 +138,7 @@ export default function AdminOverviewPage() {
             </div>
             <div className="mt-3 flex items-baseline justify-between">
               <div>
-                <span className="text-3xl font-black text-slate-900 tracking-tight">{liveStats.vendorsActiveNow}</span>
+                <span className="text-3xl font-black text-slate-900 tracking-tight">{snapshot.vendorsActiveNow}</span>
                 <span className="text-xs text-slate-500 font-medium ml-1.5">taking orders</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-forest-50 text-forest-800 flex items-center justify-center font-bold">
@@ -134,29 +147,31 @@ export default function AdminOverviewPage() {
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
               <span>Total registered:</span>
-              <strong className="text-slate-900 font-bold">{liveStats.vendorsRegistered} merchants</strong>
+              <strong className="text-slate-900 font-bold">{snapshot.vendorsRegistered} merchants</strong>
             </div>
           </div>
 
-          {/* Card 4: Daily Volume & GMV */}
+          {/* Card 4: GMV */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs hover:border-forest-700/50 transition-all duration-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Today's GMV</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Order Volume</span>
               <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full">
                 Revenue
               </span>
             </div>
             <div className="mt-3 flex items-baseline justify-between">
               <div>
-                <span className="text-2xl sm:text-3xl font-black text-forest-850 tracking-tight">{liveStats.todayRevenue}</span>
+                <span className="text-2xl sm:text-3xl font-black text-forest-850 tracking-tight">
+                  ₦{snapshot.totalRevenue.toLocaleString()}
+                </span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
                 <DollarSign className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-              <span>Completed orders:</span>
-              <strong className="text-slate-900 font-bold">{liveStats.todayOrders} orders</strong>
+              <span>Recorded orders:</span>
+              <strong className="text-slate-900 font-bold">{snapshot.totalOrders} orders</strong>
             </div>
           </div>
         </div>
@@ -167,8 +182,8 @@ export default function AdminOverviewPage() {
           <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">Traffic by Platform</h3>
-                <p className="text-xs text-slate-500">Breakdown of active users accessing OM</p>
+                <h3 className="text-base font-extrabold text-slate-900">Users by Platform</h3>
+                <p className="text-xs text-slate-500">Breakdown from registered user records</p>
               </div>
               <Activity className="w-5 h-5 text-forest-800" />
             </div>
@@ -180,12 +195,12 @@ export default function AdminOverviewPage() {
                     <Smartphone className="w-4 h-4 text-emerald-600" />
                     Android / iOS Mobile App
                   </span>
-                  <span className="text-emerald-700 font-extrabold">{liveStats.appUsersPercent}%</span>
+                  <span className="text-emerald-700 font-extrabold">{snapshot.appUsersPercent}%</span>
                 </div>
                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-forest-800 rounded-full transition-all duration-500"
-                    style={{ width: `${liveStats.appUsersPercent}%` }}
+                    style={{ width: `${snapshot.appUsersPercent}%` }}
                   ></div>
                 </div>
               </div>
@@ -196,20 +211,22 @@ export default function AdminOverviewPage() {
                     <Globe className="w-4 h-4 text-blue-600" />
                     Web Browser / PWA
                   </span>
-                  <span className="text-slate-600 font-extrabold">{liveStats.webUsersPercent}%</span>
+                  <span className="text-slate-600 font-extrabold">{snapshot.webUsersPercent}%</span>
                 </div>
                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-slate-400 rounded-full transition-all duration-500"
-                    style={{ width: `${liveStats.webUsersPercent}%` }}
+                    style={{ width: `${snapshot.webUsersPercent}%` }}
                   ></div>
                 </div>
               </div>
             </div>
 
             <div className="p-3.5 bg-forest-50/80 rounded-xl border border-forest-100 text-xs text-forest-900 flex items-start gap-2.5">
-              <span className="font-bold text-forest-800">💡 Note:</span>
-              <span>Mobile app downloads increased by 24% after the Omoku street flyer campaign.</span>
+              <span className="font-bold text-forest-800">Info:</span>
+              <span>
+                {snapshot.pendingProductApprovalsCount} product listing(s) currently awaiting admin approval.
+              </span>
             </div>
           </div>
 
@@ -218,7 +235,7 @@ export default function AdminOverviewPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Admin Action Quick-Desk</h3>
-                <p className="text-xs text-slate-500">High priority pending tasks requiring immediate approval</p>
+                <p className="text-xs text-slate-500">Live pending tasks requiring admin review</p>
               </div>
             </div>
 
@@ -232,14 +249,16 @@ export default function AdminOverviewPage() {
                     <ShieldCheck className="w-4 h-4" />
                   </div>
                   <span className="text-xs font-extrabold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
-                    {liveStats.kycPending} Pending
+                    {snapshot.kycPendingCount} Pending
                   </span>
                 </div>
                 <div className="mt-3">
                   <h4 className="text-sm font-bold text-slate-900 group-hover:text-amber-800 transition-colors">
                     KYC Verifications
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">2 Vendor IDs, 1 Rider Bike paper waiting</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {snapshot.kycPendingCount} vendor submission(s) waiting
+                  </p>
                 </div>
               </Link>
 
@@ -252,14 +271,14 @@ export default function AdminOverviewPage() {
                     <CreditCard className="w-4 h-4" />
                   </div>
                   <span className="text-xs font-extrabold bg-forest-200 text-forest-900 px-2 py-0.5 rounded-full">
-                    {liveStats.pendingPayouts}
+                    ₦{snapshot.pendingPayoutsAmount.toLocaleString()}
                   </span>
                 </div>
                 <div className="mt-3">
                   <h4 className="text-sm font-bold text-slate-900 group-hover:text-forest-800 transition-colors">
                     Pending Payouts
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Ready for batch transfer to local banks</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Pending settlement requests</p>
                 </div>
               </Link>
 
@@ -272,31 +291,37 @@ export default function AdminOverviewPage() {
                     <ShoppingBag className="w-4 h-4" />
                   </div>
                   <span className="text-xs font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-full">
-                    Live Dispatch
+                    {snapshot.totalOrders} Orders
                   </span>
                 </div>
                 <div className="mt-3">
                   <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-800 transition-colors">
                     Dispatch Control
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Monitor real-time pickup & rider routing</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Monitor real-time orders & rider routing</p>
                 </div>
               </Link>
             </div>
 
-            {/* Zone Coverage status */}
+            {/* Active Community Zone Coverage (from Control DB) */}
             <div className="mt-5 pt-4 border-t border-slate-100">
               <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">
-                Active Zone Coverage (ONELGA)
+                Active Communities (From Control Settings)
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {zoneRiders.map((z) => (
-                  <div key={z.zone} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                    <div className="text-[11px] font-bold text-slate-800 truncate">{z.zone}</div>
-                    <div className="text-xs font-extrabold text-forest-800 mt-0.5">{z.active} active riders</div>
-                  </div>
-                ))}
-              </div>
+              {snapshot.zoneCoverage.length === 0 ? (
+                <p className="text-xs text-slate-400">No active communities configured yet.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {snapshot.zoneCoverage.map((z) => (
+                    <div key={z.zone} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="text-[11px] font-bold text-slate-800 truncate">{z.zone}</div>
+                      <div className="text-xs font-extrabold text-forest-800 mt-0.5">
+                        {z.activeRiders} / {z.totalRiders} riders
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -306,7 +331,7 @@ export default function AdminOverviewPage() {
           <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="text-base font-extrabold text-slate-900">Real-time Order Feed</h3>
-              <p className="text-xs text-slate-500">Latest customer purchases flowing through the platform</p>
+              <p className="text-xs text-slate-500">Latest customer purchases recorded in Supabase</p>
             </div>
             <Link
               href="/control-omp/orders"
@@ -321,9 +346,9 @@ export default function AdminOverviewPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50/80 text-slate-600 text-[11px] font-extrabold uppercase tracking-wider border-b border-slate-100">
                 <tr>
-                  <th className="px-5 py-3">Order ID</th>
+                  <th className="px-5 py-3">Order Ref</th>
                   <th className="px-5 py-3">Customer</th>
-                  <th className="px-5 py-3">Vendor / Store</th>
+                  <th className="px-5 py-3">Zone</th>
                   <th className="px-5 py-3">Amount</th>
                   <th className="px-5 py-3">Assigned Rider</th>
                   <th className="px-5 py-3">Status</th>
@@ -331,29 +356,37 @@ export default function AdminOverviewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-5 py-3.5 font-bold text-forest-850">{order.id}</td>
-                    <td className="px-5 py-3.5 font-semibold text-slate-900">{order.customer}</td>
-                    <td className="px-5 py-3.5 text-slate-600 font-medium">{order.vendor}</td>
-                    <td className="px-5 py-3.5 font-extrabold text-slate-900">{order.amount}</td>
-                    <td className="px-5 py-3.5 text-xs text-slate-600">{order.rider}</td>
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          order.status === 'Delivered'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : order.status === 'In Transit'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {order.status}
-                      </span>
+                {snapshot.recentOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-xs text-slate-500">
+                      {loading ? 'Loading live orders from database...' : 'No orders recorded in the database yet.'}
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-500">{order.channel}</td>
                   </tr>
-                ))}
+                ) : (
+                  snapshot.recentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-forest-850">{order.reference}</td>
+                      <td className="px-5 py-3.5 font-semibold text-slate-900">{order.customer}</td>
+                      <td className="px-5 py-3.5 text-slate-600 font-medium">{order.vendor}</td>
+                      <td className="px-5 py-3.5 font-extrabold text-slate-900">₦{order.amount.toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-xs text-slate-600">{order.rider}</td>
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            order.status === 'delivered'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : order.status === 'in_transit'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {order.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-slate-500">{order.channel}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

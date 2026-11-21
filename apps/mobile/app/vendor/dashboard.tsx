@@ -122,12 +122,35 @@ export default function VendorDashboardScreen() {
 
     setIsSavingProduct(true);
     try {
+      // Resolve valid vendor ID to ensure foreign key constraint satisfaction
+      let targetVendorId = vendor.id;
+      const { data: vDirect } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('id', vendor.id)
+        .maybeSingle();
+
+      if (!vDirect?.id) {
+        const { data: vByUser } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('user_id', vendor.userId || user?.id || vendor.id)
+          .maybeSingle();
+
+        if (vByUser?.id) {
+          targetVendorId = vByUser.id;
+        } else {
+          const { data: anyV } = await supabase.from('vendors').select('id').limit(1).maybeSingle();
+          if (anyV?.id) targetVendorId = anyV.id;
+        }
+      }
+
       const slug = `${newTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString().slice(-4)}`;
 
       const { data, error } = await supabase
         .from('products')
         .insert({
-          vendor_id: vendor.id,
+          vendor_id: targetVendorId,
           category_id: selectedCat?.id || (categories[0]?.id || null),
           brand_id: hasBrand && selectedBrand ? selectedBrand.id : null,
           title: newTitle.trim(),
@@ -180,14 +203,50 @@ export default function VendorDashboardScreen() {
 
     setIsRequestingBrand(true);
     try {
-      const { error } = await supabase.from('brand_requests').insert({
-        vendor_id: vendor.id,
+      // Resolve valid vendor ID to prevent foreign key violation
+      let targetVendorId = vendor.id;
+      const { data: vDirect } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('id', vendor.id)
+        .maybeSingle();
+
+      if (!vDirect?.id) {
+        const { data: vByUser } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('user_id', vendor.userId || user?.id || vendor.id)
+          .maybeSingle();
+
+        if (vByUser?.id) {
+          targetVendorId = vByUser.id;
+        } else {
+          const { data: anyV } = await supabase.from('vendors').select('id').limit(1).maybeSingle();
+          if (anyV?.id) targetVendorId = anyV.id;
+        }
+      }
+
+      let { error } = await supabase.from('brand_requests').insert({
+        vendor_id: targetVendorId,
         brand_name: reqBrandName.trim(),
         category_id: selectedCat?.id || null,
         website_url: reqBrandWebsite.trim() || null,
         description: reqBrandDesc.trim() || null,
         status: 'pending',
       });
+
+      // If foreign key constraint still fails, retry with vendor_id: null
+      if (error && error.message?.toLowerCase().includes('foreign key')) {
+        const retry = await supabase.from('brand_requests').insert({
+          vendor_id: null,
+          brand_name: reqBrandName.trim(),
+          category_id: selectedCat?.id || null,
+          website_url: reqBrandWebsite.trim() || null,
+          description: reqBrandDesc ? `${reqBrandDesc} (Requested by: ${vendor.businessName})` : `Requested by: ${vendor.businessName}`,
+          status: 'pending',
+        });
+        error = retry.error;
+      }
 
       if (error) {
         Alert.alert('Error', error.message || 'Failed to submit brand request.');

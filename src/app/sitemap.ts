@@ -3,8 +3,10 @@ import { getCategories } from '@/actions/categories';
 import { getProducts } from '@/actions/products';
 import { getVendors } from '@/actions/vendors';
 
+export const dynamic = 'force-dynamic';
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://ogbamarketplace.com';
+  const baseUrl = 'https://ogbamarketplace.com.ng';
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {

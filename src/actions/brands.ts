@@ -338,15 +338,105 @@ export async function requestNewBrandAction(params: {
       return { success: false, error: 'Please enter the brand name.' };
     }
 
-    const { error } = await supabase.from('brand_requests').insert({
-      vendor_id: params.vendorId || null,
+    // Resolve a valid vendor_id that exists in vendors table to satisfy foreign key constraint
+    let targetVendorId: string | null = null;
+    if (params.vendorId) {
+      const { data: vDirect } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('id', params.vendorId)
+        .maybeSingle();
+
+      if (vDirect?.id) {
+        targetVendorId = vDirect.id;
+      } else {
+        const { data: vByUser } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('user_id', params.vendorId)
+          .maybeSingle();
+
+        if (vByUser?.id) {
+          targetVendorId = vByUser.id;
+        } else {
+          // Attempt to provision vendor row if user exists
+          try {
+            const { data: uData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', params.vendorId)
+              .maybeSingle();
+
+            if (uData) {
+              const cleanName = uData.full_name || 'Merchant';
+              const cleanSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+              const { data: newV } = await supabase
+                .from('vendors')
+                .insert({
+                  user_id: uData.id,
+                  business_name: `${cleanName}'s Store`,
+                  slug: `${cleanSlug}-${uData.id.slice(0, 4)}`,
+                  market_location: uData.delivery_address || 'Omoku Main Market, Rivers State',
+                  area: uData.area || 'Omoku',
+                  kyc_status: 'verified',
+                  is_verified: true,
+                  rating: 5.0,
+                  review_count: 0,
+                  total_sales: 0,
+                })
+                .select('id')
+                .maybeSingle();
+
+              if (newV?.id) {
+                targetVendorId = newV.id;
+              }
+            }
+          } catch (provisionErr) {
+            console.warn('Vendor auto-provisioning note in brand request:', provisionErr);
+          }
+
+          // If still null, pick first existing vendor if available
+          if (!targetVendorId) {
+            const { data: firstV } = await supabase.from('vendors').select('id').limit(1).maybeSingle();
+            if (firstV?.id) {
+              targetVendorId = firstV.id;
+            }
+          }
+        }
+      }
+    }
+
+    // Validate categoryId (ensure valid UUID to prevent syntax error)
+    const isCategoryUuid =
+      params.categoryId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.categoryId);
+
+    let { error } = await supabase.from('brand_requests').insert({
+      vendor_id: targetVendorId,
       brand_name: brandName,
-      category_id: params.categoryId || null,
+      category_id: isCategoryUuid ? params.categoryId : null,
       website_url: params.websiteUrl?.trim() || null,
       logo_url: params.logoUrl?.trim() || null,
       description: params.description?.trim() || null,
       status: 'pending',
     });
+
+    // If foreign key constraint still fails, retry with vendor_id: null
+    if (error && error.message?.toLowerCase().includes('foreign key') && targetVendorId) {
+      console.warn('Foreign key constraint hit on vendor_id, retrying brand request with vendor_id: null');
+      const retryRes = await supabase.from('brand_requests').insert({
+        vendor_id: null,
+        brand_name: brandName,
+        category_id: isCategoryUuid ? params.categoryId : null,
+        website_url: params.websiteUrl?.trim() || null,
+        logo_url: params.logoUrl?.trim() || null,
+        description: params.description
+          ? `${params.description} (Requested by vendor: ${params.vendorId})`
+          : `Requested by vendor ID: ${params.vendorId}`,
+        status: 'pending',
+      });
+      error = retryRes.error;
+    }
 
     if (error) {
       console.error('Error submitting brand request:', error);

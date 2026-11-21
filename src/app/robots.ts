@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/api/', '/admin/', '/control-omp/', '/checkout/success/'],
     },
-    sitemap: 'https://ogbamarketplace.com/sitemap.xml',
+    sitemap: 'https://ogbamarketplace.com.ng/sitemap.xml',
   };
 }

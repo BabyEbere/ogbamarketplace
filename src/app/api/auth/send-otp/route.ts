@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { sendPlatformEmail, wrapPlatformEmailTemplate } from '@/lib/email/mailer';
+import { cacheSet } from '@/lib/redis';
 
 /**
  * Ogba Marketplace OTP Gateway — Brevo Email & SMS
  * Reads Brevo API key directly from Supabase DB `platform_settings` table!
  */
-
-const globalOtpStore: Record<string, { code: string; expiresAt: number }> = {};
 
 function normalizeNigerianPhone(phone: string): string {
   let cleaned = phone.replace(/[^0-9]/g, '');
@@ -19,8 +19,6 @@ function normalizeNigerianPhone(phone: string): string {
   }
   return cleaned;
 }
-
-export { globalOtpStore };
 
 export async function POST(req: Request) {
   try {
@@ -41,11 +39,11 @@ export async function POST(req: Request) {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    globalOtpStore[key] = { code: otpCode, expiresAt };
+    await cacheSet(`otp:${key}`, { code: otpCode, expiresAt }, 600);
 
     // 1. Fetch Brevo configuration from DB `platform_settings`
     let brevoApiKey = process.env.BREVO_API_KEY;
-    let brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || 'support@ogbamarketplace.com';
+    let brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || 'support@ogbamarketplace.com.ng';
     let brevoSenderName = process.env.BREVO_SENDER_NAME || 'OGBA MARKET PLACE';
 
     try {
@@ -110,42 +108,40 @@ export async function POST(req: Request) {
     }
 
     // 3. ONLY dispatch Email if NO phone number was provided (e.g. email-only sign in)
-    if (!normalizedPhone && targetEmail && brevoApiKey && !brevoApiKey.includes('placeholder')) {
+    if (!normalizedPhone && targetEmail) {
       try {
-        const emailRes = await fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'api-key': brevoApiKey,
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            sender: { name: brevoSenderName, email: brevoSenderEmail },
-            to: [{ email: targetEmail, name: name || 'Ogba Marketplace Member' }],
-            subject: `Your Verification Code: ${otpCode} - OGBA MARKET PLACE`,
-            htmlContent: `
-              <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 24px; border: 1px solid #E2E8F0; border-radius: 12px;">
-                <div style="background-color: #164E2E; padding: 14px; border-radius: 8px; text-align: center; color: white;">
-                  <h2 style="margin: 0; font-size: 20px;">OGBA MARKET PLACE</h2>
-                </div>
-                <div style="padding: 20px 0; text-align: center;">
-                  <p style="color: #475569; font-size: 14px;">Your verification code is:</p>
-                  <div style="background-color: #F0FDF4; border: 2px dashed #16A34A; border-radius: 8px; padding: 12px; margin: 16px 0;">
-                    <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #164E2E;">${otpCode}</span>
-                  </div>
-                  <p style="color: #64748B; font-size: 12px;">This code expires in 10 minutes. Do not share with anyone.</p>
-                </div>
-              </div>
-            `,
-          }),
+        const otpContentHtml = `
+          <div style="padding: 10px 0; text-align: center;">
+            <p style="color: #475569; font-size: 14px; margin-bottom: 16px;">Use the verification code below to complete your login:</p>
+            <div style="background-color: #F0FDF4; border: 2px dashed #16A34A; border-radius: 8px; padding: 14px; margin: 16px auto; max-width: 240px;">
+              <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #164E2E;">${otpCode}</span>
+            </div>
+            <p style="color: #64748B; font-size: 12px; margin-top: 16px;">This code is valid for 10 minutes. For your security, never share this code with anyone.</p>
+          </div>
+        `;
+
+        const html = wrapPlatformEmailTemplate({
+          badgeText: 'One-Time Passcode (OTP)',
+          badgeBg: '#F0FDF4',
+          badgeColor: '#166534',
+          title: 'Your Security Code',
+          contentHtml: otpContentHtml,
+          footerNote: 'If you did not request this verification code, please ignore this email or contact support.',
         });
 
-        if (emailRes.ok) {
+        const emailRes = await sendPlatformEmail({
+          to: [{ email: targetEmail, name: name || 'Ogba Marketplace Member' }],
+          subject: `Your Verification Code: ${otpCode} - OGBA MARKET PLACE`,
+          html,
+          tags: ['otp', 'auth'],
+        });
+
+        if (emailRes.success) {
           emailDispatched = true;
-          console.log('[Brevo Email Dispatched to]:', targetEmail);
+          console.log('[Mailer OTP Dispatched to]:', targetEmail);
         }
       } catch (err) {
-        console.error('[Brevo Email Exception]:', err);
+        console.error('[Mailer OTP Exception]:', err);
       }
     }
 

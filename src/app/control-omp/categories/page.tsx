@@ -140,7 +140,7 @@ export default function AdminCategoriesPage() {
         });
 
         if (res.success) {
-          setFormSuccess(`Department "${name}" updated in database!`);
+          setFormSuccess(`Department "${name}" updated successfully!`);
           await loadCategories();
           setTimeout(() => setShowModal(false), 900);
         } else {
@@ -156,7 +156,7 @@ export default function AdminCategoriesPage() {
         });
 
         if (res.success) {
-          setFormSuccess(`Department "${name}" created in database successfully!`);
+          setFormSuccess(`Department "${name}" created successfully!`);
           await loadCategories();
           setTimeout(() => setShowModal(false), 900);
         } else {
@@ -203,8 +203,8 @@ export default function AdminCategoriesPage() {
     <div className="flex-1 pb-16 bg-slate-50">
       <DashboardHeader
         title="Market Categories & Commercial Departments"
-        subtitle="100% database-driven commerce departments for the web catalog and mobile app. Add and manage categories."
-        liveStats={{ label: 'Total in DB', value: `${categories.length} Departments` }}
+        subtitle="Commercial departments for the web catalog and mobile app. Add and manage marketplace categories."
+        liveStats={{ label: 'Total Departments', value: `${categories.length} Categories` }}
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 space-y-6">
@@ -225,7 +225,7 @@ export default function AdminCategoriesPage() {
             <button
               onClick={loadCategories}
               className="p-2 text-slate-500 hover:text-forest-850 hover:bg-slate-100 rounded-xl transition-colors"
-              title="Refresh from database"
+              title="Refresh"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -239,12 +239,12 @@ export default function AdminCategoriesPage() {
           </div>
         </div>
 
-        {/* Categories Database Table */}
+        {/* Categories Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <Layers3 className="w-4 h-4 text-forest-850" />
-              <span>Database Records (`categories` Table)</span>
+              <span>Marketplace Categories Directory</span>
             </h4>
             <span className="text-xs font-bold text-forest-850 bg-forest-50 px-2.5 py-1 rounded-full border border-forest-100">
               {categories.length} Total Departments
@@ -266,8 +266,8 @@ export default function AdminCategoriesPage() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-xs text-slate-400">
-                      Loading categories directly from Supabase database...
+                    <td colSpan={6} className="px-5 py-12 text-center text-xs text-slate-400 font-semibold">
+                      Loading marketplace departments...
                     </td>
                   </tr>
                 ) : filteredCategories.length === 0 ? (
@@ -343,7 +343,7 @@ export default function AdminCategoriesPage() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-forest-850" />
-                <span>{editingCategory ? 'Edit Department in Database' : 'Create New Department in Database'}</span>
+                <span>{editingCategory ? 'Edit Department' : 'Create New Department'}</span>
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -459,7 +459,7 @@ export default function AdminCategoriesPage() {
                   ) : (
                     <>
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>{editingCategory ? 'Update in Database' : 'Save Department to Database'}</span>
+                      <span>{editingCategory ? 'Save Changes' : 'Create Department'}</span>
                     </>
                   )}
                 </button>

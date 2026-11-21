@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { 
   BatteryCharging,
   Smartphone,
@@ -18,7 +18,8 @@ import {
   Baby,
   Layers,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shuffle
 } from 'lucide-react';
 import { Category } from '@/types/marketplace';
 import { getCategories } from '@/actions/categories';
@@ -31,6 +32,7 @@ interface CategoryGridProps {
 
 export default function CategoryGrid({ categories: initialCategories, selectedCategory, onSelectCategory }: CategoryGridProps) {
   const [categoriesList, setCategoriesList] = useState<Category[]>(initialCategories || []);
+  const [shuffleTick, setShuffleTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -47,6 +49,58 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
     load();
   }, [initialCategories]);
 
+  // Dynamic Popularity Sorting & Shuffle:
+  // Prioritizes departments with the most product views and opens,
+  // while rotating unviewed departments so the catalog stays dynamic.
+  const sortedCategories = useMemo(() => {
+    if (!categoriesList || categoriesList.length === 0) return [];
+
+    let localViews: Record<string, number> = {};
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ogba_category_views');
+        if (stored) localViews = JSON.parse(stored);
+      } catch (e) {}
+    }
+
+    const scored = categoriesList.map((cat: any) => {
+      const dbViews = Number(cat.totalViews) || 0;
+      const clientViews = Number(localViews[cat.slug]) || 0;
+      const count = Number(cat.itemCount) || 0;
+      // Weight product views heavily, along with user category opens
+      const score = (dbViews * 4) + (clientViews * 3) + (count > 0 ? 1 : 0);
+      return { ...cat, score };
+    });
+
+    const popular = scored.filter((c: any) => c.score > 0);
+    const unviewed = scored.filter((c: any) => c.score === 0);
+
+    // Sort popular by score descending
+    popular.sort((a: any, b: any) => b.score - a.score);
+
+    // Dynamic rotational shuffle for neutral/unviewed departments
+    const shuffledUnviewed = [...unviewed].sort(() => 0.5 - Math.random());
+
+    return [...popular, ...shuffledUnviewed];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoriesList, shuffleTick]);
+
+  const handleManualShuffle = () => {
+    setShuffleTick((prev) => prev + 1);
+  };
+
+  const handleSelect = (slug: string) => {
+    if (slug !== 'all' && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ogba_category_views');
+        const viewsMap = stored ? JSON.parse(stored) : {};
+        viewsMap[slug] = (viewsMap[slug] || 0) + 1;
+        localStorage.setItem('ogba_category_views', JSON.stringify(viewsMap));
+      } catch (e) {}
+    }
+    onSelectCategory(slug);
+  };
+
   // Check scroll position to update arrow visibility
   const checkScroll = () => {
     if (scrollRef.current) {
@@ -60,7 +114,7 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
     checkScroll();
     window.addEventListener('resize', checkScroll);
     return () => window.removeEventListener('resize', checkScroll);
-  }, [categoriesList]);
+  }, [sortedCategories]);
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -102,6 +156,16 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
         <div className="category-glider-controls">
           <button
             type="button"
+            className="category-view-all-btn"
+            onClick={handleManualShuffle}
+            title="Shuffle Departments"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}
+          >
+            <Shuffle size={13} />
+            <span>Shuffle</span>
+          </button>
+          <button
+            type="button"
             className={`glider-arrow-btn ${!canScrollLeft ? 'disabled' : ''}`}
             onClick={() => scroll('left')}
             disabled={!canScrollLeft}
@@ -121,9 +185,9 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
           <button
             type="button"
             className="category-view-all-btn"
-            onClick={() => onSelectCategory('all')}
+            onClick={() => handleSelect('all')}
           >
-            All ({categoriesList.length})
+            All ({sortedCategories.length})
           </button>
         </div>
       </div>
@@ -137,7 +201,7 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
         <button
           type="button"
           className={`glider-card ${selectedCategory === 'all' ? 'active' : ''}`}
-          onClick={() => onSelectCategory('all')}
+          onClick={() => handleSelect('all')}
         >
           <div className="glider-bubble">
             <Layers size={18} />
@@ -145,14 +209,14 @@ export default function CategoryGrid({ categories: initialCategories, selectedCa
           <span className="glider-name">All Items</span>
         </button>
 
-        {categoriesList.map((cat) => {
+        {sortedCategories.map((cat: any) => {
           const isSelected = selectedCategory === cat.slug;
           return (
             <button
               key={cat.id}
               type="button"
               className={`glider-card ${isSelected ? 'active' : ''}`}
-              onClick={() => onSelectCategory(cat.slug)}
+              onClick={() => handleSelect(cat.slug)}
             >
               <div className="glider-bubble">
                 {getCategoryIcon(cat.iconName)}

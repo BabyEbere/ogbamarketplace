@@ -272,8 +272,44 @@ textarea {
   border: 2px solid white;
 }
 
+.account-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+}
+
+.account-menu-link:hover {
+  background: var(--bg-main);
+}
+
+.mobile-menu-trigger {
+  display: none;
+}
+
 /* Mobile Header Media Queries - Ultra-Compact Single Row */
 @media (max-width: 768px) {
+  .mobile-menu-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    border-radius: 50%;
+    background: var(--bg-muted);
+    border: 1px solid var(--border-light);
+    color: var(--text-main);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
   .top-bar {
     padding: 0.2rem 0;
     font-size: 0.68rem;
@@ -494,8 +530,9 @@ textarea {
 
 .ad-carousel-grid {
   display: grid;
-  grid-template-columns: 340px 1fr;
-  min-height: 270px;
+  grid-template-columns: 320px 1fr;
+  height: 256px;
+  overflow: hidden;
   align-items: center;
 }
 
@@ -509,13 +546,14 @@ textarea {
 .ad-image-box {
   position: relative;
   width: 100%;
-  max-width: 290px;
-  height: 220px;
+  max-width: 280px;
+  height: 210px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
   border: 2px solid rgba(255, 255, 255, 0.2);
   background: #064E3B;
+  flex-shrink: 0;
 }
 
 .ad-discount-pill {
@@ -551,11 +589,13 @@ textarea {
 }
 
 .ad-content-container {
-  padding: 1.25rem 2rem 1.25rem 0.5rem;
+  padding: 1.25rem 2.5rem 1.25rem 0.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
   color: white;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ad-badge-row {
@@ -598,19 +638,33 @@ textarea {
 
 .ad-product-title {
   font-family: var(--font-heading);
-  font-size: 1.55rem;
+  font-size: 1.35rem;
   font-weight: 800;
   line-height: 1.25;
-  margin-bottom: 0.4rem;
+  max-height: 2.5em;
+  margin-bottom: 0.35rem;
   color: #FFFFFF;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .ad-product-description {
   color: #D1FAE5;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   line-height: 1.4;
-  margin-bottom: 0.85rem;
-  max-width: 540px;
+  max-height: 2.8em;
+  margin-bottom: 0.75rem;
+  max-width: 580px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 .ad-price-details-row {
@@ -733,6 +787,7 @@ textarea {
 
   .ad-carousel-grid {
     grid-template-columns: 110px 1fr;
+    height: auto;
     min-height: 120px;
     align-items: stretch;
   }
@@ -811,16 +866,7 @@ textarea {
   }
 
   .carousel-arrow {
-    width: 22px;
-    height: 22px;
-  }
-
-  .carousel-arrow-left {
-    left: 4px;
-  }
-
-  .carousel-arrow-right {
-    right: 4px;
+    display: none;
   }
 
   .carousel-dots-wrap {
@@ -1613,4 +1659,78 @@ textarea {
 
 .footer-links a:hover {
   color: #34D399;
+}
+
+/* Product Rich Text Formatting (TinyMCE Content) */
+.product-rich-description {
+  color: var(--text-subtle);
+  line-height: 1.65;
+  font-size: 0.88rem;
+}
+
+.product-rich-description p {
+  margin-bottom: 0.75rem;
+}
+
+.product-rich-description ul,
+.product-rich-description ol {
+  margin-left: 1.35rem;
+  margin-bottom: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.product-rich-description ul {
+  list-style-type: disc;
+}
+
+.product-rich-description ol {
+  list-style-type: decimal;
+}
+
+.product-rich-description li {
+  line-height: 1.5;
+}
+
+.product-rich-description strong,
+.product-rich-description b {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.product-rich-description h1,
+.product-rich-description h2,
+.product-rich-description h3,
+.product-rich-description h4 {
+  font-weight: 800;
+  color: var(--text-main);
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+
+.product-rich-description table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.84rem;
+}
+
+.product-rich-description th,
+.product-rich-description td {
+  border: 1px solid var(--border-light);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.product-rich-description th {
+  background: var(--bg-main);
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.tinymce-wrapper .tox-tinymce {
+  border: none !important;
+  border-radius: var(--radius-xl) !important;
 }

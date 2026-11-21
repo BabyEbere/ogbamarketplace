@@ -1,14 +1,19 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { CartProvider, useCart } from '@/context/CartContext';
+import { UserProvider } from '@/context/UserContext';
+import { FavoritesProvider } from '@/context/FavoritesContext';
 import CartDrawer from '@/components/CartDrawer';
 
 function GlobalCartDrawer() {
+  const router = useRouter();
   const { isCartOpen, closeCart, cartItems, updateQuantity, removeFromCart } = useCart();
 
   const handleCheckout = () => {
-    window.location.href = '/checkout';
+    closeCart();
+    router.push('/checkout');
   };
 
   return (
@@ -25,9 +30,13 @@ function GlobalCartDrawer() {
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CartProvider>
-      {children}
-      <GlobalCartDrawer />
-    </CartProvider>
+    <UserProvider>
+      <FavoritesProvider>
+        <CartProvider>
+          {children}
+          <GlobalCartDrawer />
+        </CartProvider>
+      </FavoritesProvider>
+    </UserProvider>
   );
 }

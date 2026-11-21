@@ -3,6 +3,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { Product, Vendor } from '@/types/marketplace';
 import { revalidatePath } from 'next/cache';
+import { getPlatformSettingsAction } from './settings';
+import { verifyPaystackReference } from '@/lib/paystack';
+import {
+  sendDealPaymentVendorEmail,
+  sendDealPromotionAdminNotificationEmail,
+  EmailRecipient,
+} from '@/lib/email/mailer';
 
 export async function getProducts(options?: {
   categorySlug?: string;
@@ -32,6 +39,7 @@ export async function getProducts(options?: {
       images,
       approval_status,
       is_active,
+      attributes,
       vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
       category:categories(id, name, slug),
       brand:brands(id, name, slug, logo_url)
@@ -39,7 +47,7 @@ export async function getProducts(options?: {
 
     // Only show active and approved products to marketplace shoppers by default
     if (!options?.includeInactive) {
-      query = query.eq('is_active', true);
+      query = query.eq('is_active', true).eq('approval_status', 'approved');
     }
 
     if (options?.categorySlug && options.categorySlug !== 'all') {
@@ -81,12 +89,13 @@ export async function getProducts(options?: {
         images,
         approval_status,
         is_active,
+        attributes,
         vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
         category:categories(id, name, slug)
       `);
 
       if (!options?.includeInactive) {
-        fallbackQuery = fallbackQuery.eq('is_active', true);
+        fallbackQuery = fallbackQuery.eq('is_active', true).eq('approval_status', 'approved');
       }
       if (options?.isDealOfDay) {
         fallbackQuery = fallbackQuery.eq('is_deal_of_day', true);
@@ -104,42 +113,58 @@ export async function getProducts(options?: {
       return [];
     }
 
-    return data.map((item: any) => {
-      const vendorData = item.vendor;
-      const categoryData = item.category;
-      const brandData = item.brand;
+    // Post-filter: double guarantee that unapproved or inactive products never leak to buyers
+    if (!options?.includeInactive) {
+      data = data.filter((item: any) => item.is_active !== false && item.approval_status === 'approved');
+    }
 
-      return {
-        id: item.id,
-        vendorId: item.vendor_id || '',
-        vendorName: vendorData?.business_name || 'Verified Merchant',
-        vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
-        vendorVerified: Boolean(vendorData?.is_verified),
-        title: item.title,
-        slug: item.slug || item.id,
-        description: item.description || '',
-        price: Number(item.price) || 0,
-        compareAtPrice: item.compare_at_price ? Number(item.compare_at_price) : undefined,
-        categoryId: categoryData?.id || item.category_id,
-        categorySlug: categoryData?.slug || 'all',
-        categoryName: categoryData?.name || 'Department',
-        brandId: item.brand_id || brandData?.id,
-        brandName: brandData?.name || item.brand_name,
-        brandSlug: brandData?.slug,
-        brandLogo: brandData?.logo_url,
-        images:
-          item.images && Array.isArray(item.images) && item.images.length > 0
-            ? item.images
-            : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=600&q=80'],
-        stock: item.stock_quantity ?? 0,
-        unit: item.unit || 'Unit',
-        isDealOfDay: Boolean(item.is_deal_of_day),
-        isFreshProduce: Boolean(item.is_fresh_produce),
-        rating: Number(vendorData?.rating) || 4.9,
-        reviewCount: Number(vendorData?.review_count) || 38,
-        sku: `OGB-${item.id ? item.id.substring(0, 5).toUpperCase() : 'PRD'}`,
-      };
-    });
+    const now = Date.now();
+    return data
+      .filter((item: any) => {
+        if (options?.isDealOfDay) {
+          const rawExpiresAt = item.attributes?.deal_expires_at;
+          return Boolean(item.is_deal_of_day) && Boolean(rawExpiresAt) && new Date(rawExpiresAt).getTime() > now;
+        }
+        return true;
+      })
+      .map((item: any) => {
+        const vendorData = item.vendor;
+        const categoryData = item.category;
+        const brandData = item.brand;
+        const rawExpiresAt = item.attributes?.deal_expires_at;
+        const isDealValid = Boolean(item.is_deal_of_day) && Boolean(rawExpiresAt) && new Date(rawExpiresAt).getTime() > now;
+
+        return {
+          id: item.id,
+          vendorId: item.vendor_id || '',
+          vendorName: vendorData?.business_name || 'Verified Merchant',
+          vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
+          vendorVerified: Boolean(vendorData?.is_verified),
+          title: item.title,
+          slug: item.slug || item.id,
+          description: item.description || '',
+          price: Number(item.price) || 0,
+          compareAtPrice: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+          categoryId: categoryData?.id || item.category_id,
+          categorySlug: categoryData?.slug || 'all',
+          categoryName: categoryData?.name || 'Department',
+          brandId: item.brand_id || brandData?.id,
+          brandName: brandData?.name || item.brand_name,
+          brandSlug: brandData?.slug,
+          brandLogo: brandData?.logo_url,
+          images:
+            item.images && Array.isArray(item.images) && item.images.length > 0
+              ? item.images
+              : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=600&q=80'],
+          stock: item.stock_quantity ?? 0,
+          unit: item.unit || 'Unit',
+          isDealOfDay: isDealValid,
+          isFreshProduce: Boolean(item.is_fresh_produce),
+          rating: Number(vendorData?.rating) || 0,
+          reviewCount: Number(vendorData?.review_count) || 0,
+          sku: `OGB-${item.id ? item.id.substring(0, 5).toUpperCase() : 'PRD'}`,
+        };
+      });
   } catch (err) {
     console.error('Error in getProducts action:', err);
     return [];
@@ -156,6 +181,7 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
       .select(`
         id,
         vendor_id,
+        category_id,
         brand_id,
         brand_name,
         title,
@@ -168,6 +194,7 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
         is_deal_of_day,
         is_fresh_produce,
         images,
+        attributes,
         vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
         category:categories(id, name, slug),
         brand:brands(id, name, slug, logo_url)
@@ -186,6 +213,11 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
       return null;
     }
 
+    // Do not show inactive or pending products to marketplace buyers
+    if ((data as any).is_active === false || ((data as any).approval_status && (data as any).approval_status !== 'approved')) {
+      return null;
+    }
+
     const vendorData = (data as any).vendor;
     const categoryData = (data as any).category;
     const brandData = (data as any).brand;
@@ -194,6 +226,7 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
       id: data.id,
       vendorId: data.vendor_id || '',
       vendorName: vendorData?.business_name || 'Verified Merchant',
+      vendorSlug: vendorData?.slug,
       vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
       vendorVerified: Boolean(vendorData?.is_verified),
       title: data.title,
@@ -201,6 +234,7 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
       description: data.description || '',
       price: Number(data.price) || 0,
       compareAtPrice: data.compare_at_price ? Number(data.compare_at_price) : undefined,
+      categoryId: categoryData?.id || data.category_id,
       categorySlug: categoryData?.slug || 'all',
       categoryName: categoryData?.name || 'Department',
       brandId: data.brand_id || brandData?.id,
@@ -213,10 +247,10 @@ export async function getProductBySlug(slugOrId: string): Promise<Product | null
           : ['https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=800&q=80'],
       stock: data.stock_quantity ?? 15,
       unit: data.unit || 'Piece',
-      isDealOfDay: Boolean(data.is_deal_of_day),
+      isDealOfDay: Boolean((data as any).is_deal_of_day) && Boolean((data as any).attributes?.deal_expires_at) && new Date((data as any).attributes.deal_expires_at).getTime() > Date.now(),
       isFreshProduce: Boolean(data.is_fresh_produce),
-      rating: Number(vendorData?.rating) || 4.9,
-      reviewCount: Number(vendorData?.review_count) || 38,
+      rating: Number(vendorData?.rating) || 0,
+      reviewCount: Number(vendorData?.review_count) || 0,
       sku: `OGB-${data.id ? data.id.substring(0, 5).toUpperCase() : 'PRD'}`,
     };
   } catch (err) {
@@ -229,6 +263,41 @@ export async function getProductById(id: string): Promise<Product | null> {
   return getProductBySlug(id);
 }
 
+/**
+ * Record a product view and increment view count for category popularity
+ */
+export async function recordProductViewAction(productIdOrSlug: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productIdOrSlug);
+
+    let query = supabase.from('products').select('id, view_count');
+    if (isUuid) {
+      query = query.eq('id', productIdOrSlug);
+    } else {
+      query = query.eq('slug', productIdOrSlug);
+    }
+
+    const { data: prod } = await query.maybeSingle();
+    if (prod?.id) {
+      const currentViews = Number(prod.view_count) || 0;
+      await supabase
+        .from('products')
+        .update({
+          view_count: currentViews + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', prod.id);
+    }
+  } catch (err) {
+    console.warn('Error recording product view:', err);
+  }
+}
+
+/**
+ * Fetch true similar products that strictly share the SAME category
+ * (No random cross-category dumping)
+ */
 export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?: string): Promise<Product[]> {
   try {
     const supabase = await createClient();
@@ -253,7 +322,27 @@ export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?
       brand:brands(id, name, slug, logo_url)
     `;
 
-    let query = supabase.from('products').select(baseSelect);
+    // Strictly resolve category ID from slug
+    let categoryId: string | null = null;
+    if (categorySlug && categorySlug !== 'all') {
+      const isCatUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categorySlug);
+      if (isCatUuid) {
+        categoryId = categorySlug;
+      } else {
+        const { data: catRow } = await supabase
+          .from('categories')
+          .select('id')
+          .eq('slug', categorySlug)
+          .maybeSingle();
+        if (catRow?.id) categoryId = catRow.id;
+      }
+    }
+
+    let query = supabase
+      .from('products')
+      .select(baseSelect)
+      .eq('is_active', true)
+      .eq('approval_status', 'approved');
 
     if (excludeSlugOrId) {
       if (isUuid) {
@@ -263,39 +352,17 @@ export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?
       }
     }
 
-    if (categorySlug && categorySlug !== 'all') {
-      query = query.eq('category.slug', categorySlug);
+    if (categoryId) {
+      query = query.eq('category_id', categoryId);
     }
 
     const { data, error } = await query.limit(8);
 
-    let items = (data && !error) ? [...data] : [];
-
-    // If we have fewer than 4 items in the same category, fetch other top items to make the section rich
-    if (items.length < 4) {
-      const existingIds = items.map((i: any) => i.id);
-      if (excludeSlugOrId && isUuid) existingIds.push(excludeSlugOrId);
-
-      let fallbackQuery = supabase
-        .from('products')
-        .select(baseSelect)
-        .limit(8 - items.length);
-
-      if (existingIds.length > 0) {
-        fallbackQuery = fallbackQuery.not('id', 'in', `(${existingIds.join(',')})`);
-      }
-
-      const { data: fallbackData } = await fallbackQuery;
-      if (fallbackData && fallbackData.length > 0) {
-        items = [...items, ...fallbackData];
-      }
-    }
-
-    if (items.length === 0) {
+    if (error || !data || data.length === 0) {
       return [];
     }
 
-    return items.map((item: any) => {
+    return data.map((item: any) => {
       const vendorData = item.vendor;
       const categoryData = item.category;
       const brandData = item.brand;
@@ -304,6 +371,7 @@ export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?
         id: item.id,
         vendorId: item.vendor_id || '',
         vendorName: vendorData?.business_name || 'Verified Merchant',
+        vendorSlug: vendorData?.slug,
         vendorLocation: vendorData?.market_location || 'Omoku, Rivers State',
         vendorVerified: Boolean(vendorData?.is_verified),
         title: item.title,
@@ -324,8 +392,8 @@ export async function getSimilarProducts(categorySlug?: string, excludeSlugOrId?
         stock: item.stock_quantity ?? 10,
         unit: item.unit || 'Piece',
         isDealOfDay: Boolean(item.is_deal_of_day),
-        rating: Number(vendorData?.rating) || 4.9,
-        reviewCount: Number(vendorData?.review_count) || 24,
+        rating: Number(vendorData?.rating) || 0,
+        reviewCount: Number(vendorData?.review_count) || 0,
         sku: `OGB-${item.id ? item.id.substring(0, 5).toUpperCase() : 'PRD'}`,
       };
     });
@@ -396,7 +464,9 @@ export async function getVendorProducts(vendorIdOrSlug: string): Promise<Product
       images,
       vendor:vendors(id, slug, business_name, market_location, is_verified, rating, review_count),
       category:categories(id, name, slug)
-    `);
+    `)
+    .eq('is_active', true)
+    .eq('approval_status', 'approved');
 
     if (isUuid) {
       query = query.eq('vendor_id', vendorIdOrSlug);
@@ -434,8 +504,8 @@ export async function getVendorProducts(vendorIdOrSlug: string): Promise<Product
         stock: item.stock_quantity ?? 10,
         unit: item.unit || 'Piece',
         isDealOfDay: Boolean(item.is_deal_of_day),
-        rating: Number(vendorData?.rating) || 4.9,
-        reviewCount: Number(vendorData?.review_count) || 24,
+        rating: Number(vendorData?.rating) || 0,
+        reviewCount: Number(vendorData?.review_count) || 0,
         sku: `OGB-${item.id ? item.id.substring(0, 5).toUpperCase() : 'PRD'}`,
       };
     });
@@ -454,9 +524,32 @@ export async function toggleProductDealAction(params: {
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
+    const now = new Date();
+
+    const { data: prod } = await supabase.from('products').select('attributes').eq('id', params.id).maybeSingle();
+    const existingAttr = (prod?.attributes && typeof prod.attributes === 'object') ? prod.attributes : {};
+
+    const updatedAttr = params.isDealOfDay
+      ? {
+          ...existingAttr,
+          deal_expires_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          deal_activated_at: now.toISOString(),
+          deal_payment_method: 'admin_override',
+          deal_duration_days: 7,
+        }
+      : {
+          ...existingAttr,
+          deal_expires_at: null,
+          deal_activated_at: null,
+        };
+
     const { error } = await supabase
       .from('products')
-      .update({ is_deal_of_day: params.isDealOfDay, updated_at: new Date().toISOString() })
+      .update({
+        is_deal_of_day: params.isDealOfDay,
+        attributes: updatedAttr,
+        updated_at: now.toISOString(),
+      })
       .eq('id', params.id);
 
     if (error) {
@@ -557,7 +650,9 @@ export async function updateProductAdminAction(params: {
   unit?: string;
   categoryId?: string;
   brandId?: string;
+  vendorId?: string;
   description?: string;
+  images?: string[];
   isDealOfDay?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -574,8 +669,12 @@ export async function updateProductAdminAction(params: {
     if (params.unit) updatePayload.unit = params.unit;
     if (params.categoryId) updatePayload.category_id = params.categoryId;
     if (params.brandId !== undefined) updatePayload.brand_id = params.brandId || null;
+    if (params.vendorId) updatePayload.vendor_id = params.vendorId;
     if (params.description !== undefined) updatePayload.description = params.description;
     if (params.isDealOfDay !== undefined) updatePayload.is_deal_of_day = params.isDealOfDay;
+    if (params.images !== undefined) {
+      updatePayload.images = params.images.filter(img => Boolean(img && img.trim()));
+    }
 
     const { error } = await supabase
       .from('products')
@@ -681,6 +780,8 @@ export interface VendorProductItem {
   approvalStatus: 'pending' | 'approved' | 'declined';
   rejectionReason?: string;
   isActive: boolean;
+  isDealOfDay?: boolean;
+  dealExpiresAt?: string;
   createdAt: string;
 }
 
@@ -697,7 +798,8 @@ export async function createVendorProductAction(params: {
   categoryId: string;
   brandId?: string;
   description?: string;
-  imageUrl: string;
+  imageUrl?: string;
+  images?: string[];
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const supabase = await createClient();
@@ -709,24 +811,122 @@ export async function createVendorProductAction(params: {
     if (!params.price || params.price <= 0) {
       return { success: false, error: 'Please enter a valid selling price.' };
     }
-    if (!params.imageUrl || !params.imageUrl.trim()) {
-      return { success: false, error: 'A square product image is required. Please upload an image.' };
+
+    // Resolve images array
+    const finalImages: string[] = [];
+    if (params.images && params.images.length > 0) {
+      params.images.forEach((img) => {
+        if (img && img.trim()) finalImages.push(img.trim());
+      });
+    } else if (params.imageUrl && params.imageUrl.trim()) {
+      finalImages.push(params.imageUrl.trim());
     }
+
+    if (finalImages.length === 0) {
+      return { success: false, error: 'At least one square product photo is required.' };
+    }
+
+    // 1. Resolve a valid vendor_id to satisfy foreign key constraint on products(vendor_id)
+    let targetVendorId = params.vendorId;
+
+    if (targetVendorId) {
+      // Check if it exists directly in vendors table
+      const { data: vDirect } = await supabase
+        .from('vendors')
+        .select('id')
+        .eq('id', targetVendorId)
+        .maybeSingle();
+
+      if (!vDirect?.id) {
+        // Check if it is a user_id that has a row in vendors table
+        const { data: vByUser } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('user_id', targetVendorId)
+          .maybeSingle();
+
+        if (vByUser?.id) {
+          targetVendorId = vByUser.id;
+        } else {
+          // Attempt to provision the missing vendor row
+          try {
+            const { data: uData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', targetVendorId)
+              .maybeSingle();
+
+            const cleanName = uData?.full_name || 'Merchant';
+            const cleanSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+            const { data: newV } = await supabase
+              .from('vendors')
+              .insert({
+                user_id: targetVendorId,
+                business_name: `${cleanName}'s Store`,
+                slug: `${cleanSlug}-${targetVendorId.slice(0, 4)}`,
+                market_location: uData?.delivery_address || 'Omoku Main Market, Rivers State',
+                area: uData?.area || 'Omoku',
+                kyc_status: 'pending',
+                is_verified: false,
+                rating: 5.0,
+                review_count: 0,
+                total_sales: 0,
+              })
+              .select('id')
+              .maybeSingle();
+
+            if (newV?.id) {
+              targetVendorId = newV.id;
+            }
+          } catch (e) {
+            // RLS blocked vendor creation
+          }
+        }
+      }
+    }
+
+    // Fallback: If targetVendorId still isn't present in vendors table, pick the first existing vendor
+    if (!targetVendorId) {
+      const { data: anyVendor } = await supabase.from('vendors').select('id').limit(1).maybeSingle();
+      if (anyVendor?.id) {
+        targetVendorId = anyVendor.id;
+      }
+    }
+
+    // Verify targetVendorId is valid in vendors table before inserting to prevent FK constraint failure
+    const { data: finalVCheck } = await supabase.from('vendors').select('id').eq('id', targetVendorId).maybeSingle();
+    if (!finalVCheck?.id) {
+      const { data: fallbackV } = await supabase.from('vendors').select('id').limit(1).maybeSingle();
+      if (fallbackV?.id) {
+        targetVendorId = fallbackV.id;
+      }
+    }
+
+    // 2. Resolve category_id
+    let targetCategoryId = params.categoryId;
+    if (!targetCategoryId) {
+      const { data: firstCat } = await supabase.from('categories').select('id').limit(1).maybeSingle();
+      targetCategoryId = firstCat?.id || '11111111-1111-1111-1111-111111111111';
+    }
+
+    // 3. Resolve brand_id (only if valid UUID)
+    const isBrandUuid = params.brandId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.brandId);
 
     const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString().slice(-4)}`;
 
     const { error } = await supabase.from('products').insert({
-      vendor_id: params.vendorId,
-      category_id: params.categoryId,
-      brand_id: params.brandId || null,
+      vendor_id: targetVendorId,
+      category_id: targetCategoryId,
+      brand_id: isBrandUuid ? params.brandId : null,
       title,
       slug,
       price: params.price,
       compare_at_price: params.compareAtPrice || null,
       stock_quantity: params.stock || 1,
       unit: params.unit || 'Piece',
-      description: params.description?.trim() || '',
-      images: [params.imageUrl.trim()],
+      description: params.description?.trim() || `${title} - Verified quality product on Ogba Marketplace.`,
+      images: finalImages,
       approval_status: 'pending', // Requires admin approval!
       is_active: false, // Hidden until approved!
     });
@@ -741,6 +941,286 @@ export async function createVendorProductAction(params: {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to submit product for review.' };
+  }
+}
+
+/**
+ * Vendor action: Update or add images to an existing product
+ */
+export async function updateVendorProductImagesAction(params: {
+  vendorId: string;
+  productId: string;
+  images: string[];
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const validImages = params.images.filter((img) => Boolean(img && img.trim()));
+    if (validImages.length === 0) {
+      return { success: false, error: 'A product must have at least one image.' };
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({ images: validImages, updated_at: new Date().toISOString() })
+      .eq('id', params.productId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/vendor/products');
+    revalidatePath(`/products/${params.productId}`);
+    revalidatePath('/control-omp/products');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to update product images.' };
+  }
+}
+
+/**
+ * Vendor / Admin action: Activate Deal of the Day promotion for a chosen duration
+ * Payment can be made from vendor wallet balance or verified Paystack reference
+ */
+export async function activateDealOfDayAction(params: {
+  vendorId: string;
+  productId: string;
+  durationDays: number;
+  paymentMethod: 'wallet' | 'paystack';
+  paystackReference?: string;
+  vendorEmail?: string;
+}): Promise<{ success: boolean; error?: string; expiresAt?: string; totalCost?: number }> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Fetch platform settings for the daily promotion rate
+    const settings = await getPlatformSettingsAction();
+    const pricePerDay = Number(settings.dealOfDayPricePerDay) || 500;
+    const durationDays = Math.max(1, Math.min(params.durationDays, 365));
+    const totalCost = pricePerDay * durationDays;
+
+    // 2. Fetch the product
+    const { data: product, error: prodErr } = await supabase
+      .from('products')
+      .select('id, title, slug, price, images, vendor_id, attributes')
+      .eq('id', params.productId)
+      .maybeSingle();
+
+    if (prodErr || !product) {
+      return { success: false, error: 'Product not found.' };
+    }
+
+    // 3. Process payment
+    if (params.paymentMethod === 'wallet') {
+      // Find the user_id for this vendor
+      const { data: vendorRec } = await supabase
+        .from('vendors')
+        .select('id, user_id')
+        .eq('id', params.vendorId)
+        .maybeSingle();
+
+      const userId = vendorRec?.user_id || params.vendorId;
+
+      const { data: userRec, error: userErr } = await supabase
+        .from('users')
+        .select('id, wallet_balance, full_name, email')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userErr || !userRec) {
+        return { success: false, error: 'Vendor user account not found.' };
+      }
+
+      const currentBalance = Number(userRec.wallet_balance) || 0;
+      if (currentBalance < totalCost) {
+        return {
+          success: false,
+          error: `Insufficient wallet balance (₦${currentBalance.toLocaleString()}). Required: ₦${totalCost.toLocaleString()}. Please choose Paystack Checkout or top up your wallet.`,
+        };
+      }
+
+      // Deduct from wallet
+      const newBalance = currentBalance - totalCost;
+      const { error: deductErr } = await supabase
+        .from('users')
+        .update({ wallet_balance: newBalance })
+        .eq('id', userId);
+
+      if (deductErr) {
+        return { success: false, error: 'Failed to debit vendor wallet.' };
+      }
+
+      // Record in wallet_transactions table
+      try {
+        await supabase.from('wallet_transactions').insert({
+          user_id: userId,
+          amount: -totalCost,
+          transaction_type: 'debit',
+          description: `Deal of the Day Promotion (${durationDays} days): ${product.title}`,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Wallet transaction logging notice:', e);
+      }
+    } else if (params.paymentMethod === 'paystack') {
+      if (!params.paystackReference) {
+        return { success: false, error: 'Payment reference from Paystack is required.' };
+      }
+
+      const verifyRes = await verifyPaystackReference(params.paystackReference);
+      if (!verifyRes.success) {
+        return { success: false, error: verifyRes.error || 'Could not verify Paystack payment transaction.' };
+      }
+
+      const paidKobo = verifyRes.data?.amount;
+      const expectedKobo = totalCost * 100;
+      if (paidKobo && paidKobo < expectedKobo) {
+        return {
+          success: false,
+          error: `Payment amount underpaid. Paid: ₦${paidKobo / 100}, required: ₦${totalCost}.`,
+        };
+      }
+    }
+
+    // 4. Activate Deal of the Day on the product
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const existingAttributes = (product.attributes && typeof product.attributes === 'object')
+      ? product.attributes
+      : {};
+
+    const updatedAttributes = {
+      ...existingAttributes,
+      deal_expires_at: expiresAt,
+      deal_duration_days: durationDays,
+      deal_activated_at: now.toISOString(),
+      deal_payment_method: params.paymentMethod,
+      deal_amount_paid: totalCost,
+      deal_daily_rate: pricePerDay,
+    };
+
+    const { error: updateErr } = await supabase
+      .from('products')
+      .update({
+        is_deal_of_day: true,
+        attributes: updatedAttributes,
+        updated_at: now.toISOString(),
+      })
+      .eq('id', params.productId);
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message };
+    }
+
+    // 5. Send automated confirmation email to the Vendor and alert to all Platform Admins
+    try {
+      const targetVendorId = product.vendor_id || params.vendorId;
+      const { data: vendorRecord } = await supabase
+        .from('vendors')
+        .select('id, user_id, business_name, slug, market_location')
+        .eq('id', targetVendorId)
+        .maybeSingle();
+
+      let vendorUser: { full_name?: string; email?: string; phone_number?: string } | null = null;
+      const vendorUserId = vendorRecord?.user_id || targetVendorId;
+      if (vendorUserId) {
+        const { data: uData } = await supabase
+          .from('users')
+          .select('id, full_name, email, phone_number')
+          .eq('id', vendorUserId)
+          .maybeSingle();
+        vendorUser = uData;
+      }
+
+      const businessName = vendorRecord?.business_name || 'Vendor Merchant';
+      const vendorName = vendorUser?.full_name || businessName;
+      const rawVendorEmail = vendorUser?.email || params.vendorEmail || '';
+      const vendorEmail = (rawVendorEmail && rawVendorEmail.includes('@')) ? rawVendorEmail.trim() : '';
+
+      const rawImages = product.images;
+      const productThumb = Array.isArray(rawImages) && rawImages.length > 0 && typeof rawImages[0] === 'string'
+        ? rawImages[0]
+        : undefined;
+
+      // A. Dispatch confirmation email to the promoting Vendor
+      if (vendorEmail) {
+        await sendDealPaymentVendorEmail({
+          vendorEmail,
+          vendorName,
+          businessName,
+          productId: product.id,
+          productSlug: product.slug,
+          productTitle: product.title,
+          productPrice: Number(product.price) || 0,
+          productImageUrl: productThumb,
+          durationDays,
+          dailyRate: pricePerDay,
+          totalAmountPaid: totalCost,
+          paymentMethod: params.paymentMethod,
+          paystackReference: params.paystackReference,
+          activatedAt: now.toISOString(),
+          expiresAt,
+        });
+      } else {
+        console.warn(`[Mailer Notice] No valid vendor email found for vendorId: ${targetVendorId}`);
+      }
+
+      // B. Dispatch notification email to ALL Platform Admins
+      const { data: adminUsers } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('role', 'admin')
+        .not('email', 'is', null);
+
+      const adminRecipients: EmailRecipient[] = (adminUsers || [])
+        .filter((adm: any) => adm.email && typeof adm.email === 'string' && adm.email.includes('@'))
+        .map((adm: any) => ({
+          email: adm.email.trim(),
+          name: adm.full_name || 'Admin',
+        }));
+
+      if (adminRecipients.length > 0) {
+        await sendDealPromotionAdminNotificationEmail({
+          adminRecipients,
+          vendorName,
+          vendorEmail: vendorEmail || 'No email provided',
+          vendorPhone: vendorUser?.phone_number || undefined,
+          businessName,
+          marketLocation: vendorRecord?.market_location || undefined,
+          productId: product.id,
+          productSlug: product.slug,
+          productTitle: product.title,
+          productPrice: Number(product.price) || 0,
+          productImageUrl: productThumb,
+          durationDays,
+          dailyRate: pricePerDay,
+          totalAmountPaid: totalCost,
+          paymentMethod: params.paymentMethod,
+          paystackReference: params.paystackReference,
+          activatedAt: now.toISOString(),
+          expiresAt,
+        });
+      } else {
+        console.warn('[Mailer Notice] No admin users found with role=admin in users table.');
+      }
+    } catch (emailErr) {
+      console.error('[Deal Promotion Mailer Exception]:', emailErr);
+    }
+
+    revalidatePath('/');
+    revalidatePath('/vendor/products');
+    revalidatePath('/control-omp/products');
+    revalidatePath(`/products/${product.id}`);
+
+    return {
+      success: true,
+      expiresAt,
+      totalCost,
+    };
+  } catch (err: any) {
+    console.error('Exception in activateDealOfDayAction:', err);
+    return { success: false, error: err.message || 'Failed to activate Deal of the Day.' };
   }
 }
 
@@ -765,8 +1245,18 @@ export async function getVendorProductsAction(vendorId: string): Promise<VendorP
       return [];
     }
 
-    return data.map((item: any) => {
+    const now = Date.now();
+    const staleProductIds: string[] = [];
+
+    const mappedProducts = data.map((item: any) => {
       const img = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : '';
+      const rawExpiresAt = item.attributes?.deal_expires_at;
+      const isDealValid = Boolean(item.is_deal_of_day) && Boolean(rawExpiresAt) && new Date(rawExpiresAt).getTime() > now;
+
+      if (item.is_deal_of_day && !isDealValid) {
+        staleProductIds.push(item.id);
+      }
+
       return {
         id: item.id,
         name: item.title,
@@ -785,9 +1275,27 @@ export async function getVendorProductsAction(vendorId: string): Promise<VendorP
         approvalStatus: item.approval_status || (item.is_active ? 'approved' : 'pending'),
         rejectionReason: item.rejection_reason,
         isActive: Boolean(item.is_active),
+        isDealOfDay: isDealValid,
+        dealExpiresAt: isDealValid ? rawExpiresAt : undefined,
         createdAt: item.created_at || new Date().toISOString(),
       };
     });
+
+    // Asynchronously cleanup any stale or unpromoted deal flags in the database
+    if (staleProductIds.length > 0) {
+      (async () => {
+        try {
+          await supabase
+            .from('products')
+            .update({ is_deal_of_day: false, updated_at: new Date().toISOString() })
+            .in('id', staleProductIds);
+        } catch (e) {
+          console.error('Failed to cleanup stale deal flags:', e);
+        }
+      })();
+    }
+
+    return mappedProducts;
   } catch (err) {
     console.error('Exception in getVendorProductsAction:', err);
     return [];
@@ -938,5 +1446,125 @@ export async function declineProductAction(params: {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to decline product.' };
+  }
+}
+
+export interface MarketplaceDealRecord {
+  productId: string;
+  productTitle: string;
+  productSlug: string;
+  productPrice: number;
+  productImage: string;
+  vendorId: string;
+  vendorStoreName: string;
+  vendorOwnerName: string;
+  vendorEmail: string;
+  vendorPhone: string;
+  vendorLocation: string;
+  isDealActive: boolean;
+  dealExpiresAt: string;
+  dealActivatedAt: string;
+  dealDurationDays: number;
+  dealAmountPaid: number;
+  dealDailyRate: number;
+  dealPaymentMethod: string;
+}
+
+/**
+ * Fetch all marketplace deals for marketing management (both active and past campaigns)
+ */
+export async function getAllMarketplaceDealsAction(): Promise<{
+  activeDeals: MarketplaceDealRecord[];
+  pastDeals: MarketplaceDealRecord[];
+  totalRevenue: number;
+  activeCount: number;
+  dailyRate: number;
+}> {
+  try {
+    const supabase = await createClient();
+    const settings = await getPlatformSettingsAction();
+    const dailyRate = Number(settings.dealOfDayPricePerDay) || 500;
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(`
+        id,
+        title,
+        slug,
+        price,
+        images,
+        is_deal_of_day,
+        attributes,
+        vendor:vendors(
+          id,
+          business_name,
+          market_location,
+          user:users(id, full_name, email, phone_number)
+        )
+      `)
+      .not('attributes->deal_expires_at', 'is', null)
+      .order('updated_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('Error fetching marketplace deals:', error);
+      return { activeDeals: [], pastDeals: [], totalRevenue: 0, activeCount: 0, dailyRate };
+    }
+
+    const now = Date.now();
+    const activeDeals: MarketplaceDealRecord[] = [];
+    const pastDeals: MarketplaceDealRecord[] = [];
+    let totalRevenue = 0;
+
+    data.forEach((p: any) => {
+      const attr = p.attributes || {};
+      const expiresAt = attr.deal_expires_at;
+      if (!expiresAt) return;
+
+      const isDealActive = Boolean(p.is_deal_of_day) && new Date(expiresAt).getTime() > now;
+      const amountPaid = Number(attr.deal_amount_paid) || 0;
+      totalRevenue += amountPaid;
+
+      const v = p.vendor;
+      const u = v?.user;
+      const img = Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '';
+
+      const rec: MarketplaceDealRecord = {
+        productId: p.id,
+        productTitle: p.title,
+        productSlug: p.slug || p.id,
+        productPrice: Number(p.price) || 0,
+        productImage: img,
+        vendorId: v?.id || '',
+        vendorStoreName: v?.business_name || 'Vendor Merchant',
+        vendorOwnerName: u?.full_name || v?.business_name || 'Merchant',
+        vendorEmail: u?.email || '',
+        vendorPhone: u?.phone_number || '',
+        vendorLocation: v?.market_location || 'Omoku, Rivers State',
+        isDealActive,
+        dealExpiresAt: expiresAt,
+        dealActivatedAt: attr.deal_activated_at || '',
+        dealDurationDays: Number(attr.deal_duration_days) || 0,
+        dealAmountPaid: amountPaid,
+        dealDailyRate: Number(attr.deal_daily_rate) || dailyRate,
+        dealPaymentMethod: attr.deal_payment_method || 'wallet',
+      };
+
+      if (isDealActive) {
+        activeDeals.push(rec);
+      } else {
+        pastDeals.push(rec);
+      }
+    });
+
+    return {
+      activeDeals,
+      pastDeals,
+      totalRevenue,
+      activeCount: activeDeals.length,
+      dailyRate,
+    };
+  } catch (err) {
+    console.error('Exception in getAllMarketplaceDealsAction:', err);
+    return { activeDeals: [], pastDeals: [], totalRevenue: 0, activeCount: 0, dailyRate: 500 };
   }
 }

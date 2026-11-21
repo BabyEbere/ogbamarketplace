@@ -7,10 +7,10 @@ export default function SeoSchema() {
     '@graph': [
       {
         '@type': 'OnlineStore',
-        '@id': 'https://ogbamarketplace.com/#store',
+        '@id': 'https://ogbamarketplace.com.ng/#store',
         name: 'OGBA MARKET PLACE',
         description: 'Hyper-local e-commerce marketplace connecting verified farmers, traders, and artisans in Ogba and Egi communities in Rivers State, Nigeria.',
-        url: 'https://ogbamarketplace.com',
+        url: 'https://ogbamarketplace.com.ng',
         areaServed: [
           {
             '@type': 'Place',
@@ -39,7 +39,7 @@ export default function SeoSchema() {
           '@type': 'ListItem',
           position: index + 1,
           name: cat.name,
-          url: `https://ogbamarketplace.com/category/${cat.slug}`
+          url: `https://ogbamarketplace.com.ng/category/${cat.slug}`
         }))
       }
     ]

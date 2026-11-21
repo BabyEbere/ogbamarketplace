@@ -26,6 +26,10 @@ import {
   Database,
   HardDrive,
   ExternalLink,
+  CreditCard,
+  Flame,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { 
   getAdminAccountsAction, 
@@ -49,10 +53,24 @@ import {
 } from '@/actions/settings';
 
 export default function AdminSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'admins' | 'communities' | 'brevo' | 'r2' | 'security' | 'platform' | 'badge'>('communities');
+  const [activeTab, setActiveTab] = useState<'admins' | 'communities' | 'brevo' | 'r2' | 'security' | 'platform' | 'badge' | 'paystack' | 'deals'>('communities');
   const [adminList, setAdminList] = useState<ControlAdmin[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [currentAdminEmail, setCurrentAdminEmail] = useState('pookietechdigitals@gmail.com');
+
+  // Paystack Gateway State (100% DB)
+  const [paystackPublicKey, setPaystackPublicKey] = useState('');
+  const [paystackSecretKey, setPaystackSecretKey] = useState('');
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [paystackLoading, setPaystackLoading] = useState(false);
+  const [paystackSaved, setPaystackSaved] = useState(false);
+  const [paystackError, setPaystackError] = useState<string | null>(null);
+
+  // Deals of the Day Promotion Rates State (100% DB)
+  const [dealPricePerDay, setDealPricePerDay] = useState('500');
+  const [dealPriceLoading, setDealPriceLoading] = useState(false);
+  const [dealPriceSaved, setDealPriceSaved] = useState(false);
+  const [dealPriceError, setDealPriceError] = useState<string | null>(null);
 
   // Add Admin State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -101,7 +119,7 @@ export default function AdminSettingsPage() {
 
   // Brevo Settings State (100% DB)
   const [brevoApiKey, setBrevoApiKey] = useState('');
-  const [brevoSenderEmail, setBrevoSenderEmail] = useState('support@ogbamarketplace.com');
+  const [brevoSenderEmail, setBrevoSenderEmail] = useState('support@ogbamarketplace.com.ng');
   const [brevoSenderName, setBrevoSenderName] = useState('OGBA MARKET PLACE');
   const [brevoLoading, setBrevoLoading] = useState(false);
   const [brevoSaved, setBrevoSaved] = useState(false);
@@ -174,10 +192,62 @@ export default function AdminSettingsPage() {
         config.verificationBadgeInstructions ||
           'Pay badge verification fee into Ogba Marketplace designated settlement account or Paystack badge gateway.'
       );
+      setDealPricePerDay(config.dealOfDayPricePerDay || '500');
+      setPaystackPublicKey(config.paystackPublicKey || '');
+      setPaystackSecretKey(config.paystackSecretKey || '');
     } catch (e) {
       console.error(e);
     }
   }
+
+  const handleSavePaystack = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaystackLoading(true);
+    setPaystackSaved(false);
+    setPaystackError(null);
+
+    try {
+      const res = await savePlatformSettingsAction({
+        paystackPublicKey,
+        paystackSecretKey,
+      });
+
+      if (res.success) {
+        setPaystackSaved(true);
+        setTimeout(() => setPaystackSaved(false), 3000);
+      } else {
+        setPaystackError(res.error || 'Failed to save Paystack API keys.');
+      }
+    } catch (err: any) {
+      setPaystackError(err.message || 'Server error while saving Paystack keys.');
+    } finally {
+      setPaystackLoading(false);
+    }
+  };
+
+  const handleSaveDealPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDealPriceLoading(true);
+    setDealPriceSaved(false);
+    setDealPriceError(null);
+
+    try {
+      const res = await savePlatformSettingsAction({
+        dealOfDayPricePerDay: dealPricePerDay,
+      });
+
+      if (res.success) {
+        setDealPriceSaved(true);
+        setTimeout(() => setDealPriceSaved(false), 3000);
+      } else {
+        setDealPriceError(res.error || 'Failed to save Deals daily rate.');
+      }
+    } catch (err: any) {
+      setDealPriceError(err.message || 'Server error while saving Deals rate.');
+    } finally {
+      setDealPriceLoading(false);
+    }
+  };
 
   const handleSaveBadge = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -484,6 +554,28 @@ export default function AdminSettingsPage() {
             <Sparkles className="w-4 h-4 text-amber-500" />
             <span>Verification Badge (Monetary)</span>
           </button>
+          <button
+            onClick={() => setActiveTab('paystack')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'paystack'
+                ? 'bg-forest-850 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 text-emerald-400" />
+            <span>Paystack Gateway Keys</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('deals')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'deals'
+                ? 'bg-forest-850 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Flame className="w-4 h-4 text-amber-500" />
+            <span>Deals of the Day Rate</span>
+          </button>
         </div>
 
         {/* TAB: Communities Management (100% DB) */}
@@ -504,7 +596,7 @@ export default function AdminSettingsPage() {
                 <button
                   onClick={loadCommunities}
                   className="p-2 text-slate-500 hover:text-forest-850 hover:bg-slate-100 rounded-xl transition-colors"
-                  title="Refresh from DB"
+                  title="Refresh"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -596,13 +688,13 @@ export default function AdminSettingsPage() {
                     {loadingCommunities ? (
                       <tr>
                         <td colSpan={4} className="px-5 py-8 text-center text-xs text-slate-400">
-                          Loading communities from Supabase database...
+                          Loading delivery communities...
                         </td>
                       </tr>
                     ) : communities.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-5 py-8 text-center text-xs text-slate-400">
-                          No communities stored in the database yet. Add one using the form above!
+                          No communities added yet. Add one using the form above!
                         </td>
                       </tr>
                     ) : (
@@ -632,7 +724,7 @@ export default function AdminSettingsPage() {
                             <button
                               onClick={() => handleDeleteCommunity(item.id, item.name)}
                               className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Delete community from DB"
+                              title="Delete community"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -698,7 +790,7 @@ export default function AdminSettingsPage() {
                   type="email"
                   value={brevoSenderEmail}
                   onChange={(e) => setBrevoSenderEmail(e.target.value)}
-                  placeholder="support@ogbamarketplace.com"
+                  placeholder="support@ogbamarketplace.com.ng"
                   required
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
                 />
@@ -852,7 +944,7 @@ export default function AdminSettingsPage() {
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
                 <span className="font-bold text-slate-800 block">How to enable Public Access on your Bucket:</span>
                 <p>1. Open your Bucket in Cloudflare R2 &rarr; Settings &rarr; Public access.</p>
-                <p>2. Enable <strong>R2.dev subdomain</strong> or connect your custom domain (e.g. <code>cdn.ogbamarketplace.com</code>).</p>
+                <p>2. Enable <strong>R2.dev subdomain</strong> or connect your custom domain (e.g. <code>cdn.ogbamarketplace.com.ng</code>).</p>
                 <p>3. Paste the public URL above so uploaded brand logos can be loaded anywhere.</p>
               </div>
 
@@ -1232,6 +1324,194 @@ export default function AdminSettingsPage() {
                     <>
                       <Save className="w-4 h-4" />
                       <span>Save Badge Settings to Database</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* TAB: Paystack Gateway Keys (100% DB) */}
+        {activeTab === 'paystack' && (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-emerald-600" />
+                Paystack Payment Gateway Configuration
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Configure your official Paystack Public & Secret (Private) API keys. Saved directly to the database so your keys are active across customer checkouts, vendor Deals-of-the-Day promotions, and verification badge fees.
+              </p>
+            </div>
+
+            {paystackSaved && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Paystack API keys saved to database successfully!</span>
+              </div>
+            )}
+
+            {paystackError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{paystackError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSavePaystack} className="space-y-4 max-w-xl">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Paystack Public Key (Client-Side Checkout) *
+                </label>
+                <input
+                  type="text"
+                  value={paystackPublicKey}
+                  onChange={(e) => setPaystackPublicKey(e.target.value)}
+                  placeholder="pk_live_... or pk_test_..."
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Used by the browser to initialize payment popups and tokenized charges.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Paystack Secret / Private Key (Server-Side Verification) *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSecretKey ? 'text' : 'password'}
+                    value={paystackSecretKey}
+                    onChange={(e) => setPaystackSecretKey(e.target.value)}
+                    placeholder="sk_live_... or sk_test_..."
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecretKey(!showSecretKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Kept strictly secure on the server for transaction verification and split settlements.
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={paystackLoading}
+                  className="py-2.5 px-5 bg-forest-850 hover:bg-forest-900 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {paystackLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Paystack Keys to Database</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* TAB: Deals of the Day Promotion Rates (100% DB) */}
+        {activeTab === 'deals' && (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Flame className="w-5 h-5 text-amber-500" />
+                Deals of the Day Daily Promotion Rates
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Set the daily price charged to vendors when they promote their approved products to "Deal of the Day" on the homepage carousel and spotlight.
+              </p>
+            </div>
+
+            {dealPriceSaved && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Daily rate saved to database successfully!</span>
+              </div>
+            )}
+
+            {dealPriceError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{dealPriceError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveDealPrice} className="space-y-4 max-w-xl">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Daily Promotion Rate (₦ / Day) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₦</span>
+                  <input
+                    type="number"
+                    min="100"
+                    step="50"
+                    value={dealPricePerDay}
+                    onChange={(e) => setDealPricePerDay(e.target.value)}
+                    placeholder="e.g. 500"
+                    required
+                    className="w-full pl-8 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-forest-800 focus:bg-white"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Default: ₦500 per day. Vendors can pay using their wallet balance or direct Paystack checkout.
+                </p>
+              </div>
+
+              {/* Live Cost Calculator Table */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                <div className="text-xs font-bold text-slate-700 uppercase">Vendor Cost Calculator Preview</div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <div className="text-[11px] text-slate-500 font-bold">1 Day</div>
+                    <div className="text-xs font-black text-forest-850 mt-0.5">₦{Number(dealPricePerDay || 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <div className="text-[11px] text-slate-500 font-bold">3 Days</div>
+                    <div className="text-xs font-black text-forest-850 mt-0.5">₦{(Number(dealPricePerDay || 0) * 3).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <div className="text-[11px] text-slate-500 font-bold">7 Days</div>
+                    <div className="text-xs font-black text-forest-850 mt-0.5">₦{(Number(dealPricePerDay || 0) * 7).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <div className="text-[11px] text-slate-500 font-bold">14 Days</div>
+                    <div className="text-xs font-black text-forest-850 mt-0.5">₦{(Number(dealPricePerDay || 0) * 14).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 bg-white rounded-lg border border-slate-200">
+                    <div className="text-[11px] text-slate-500 font-bold">30 Days</div>
+                    <div className="text-xs font-black text-forest-850 mt-0.5">₦{(Number(dealPricePerDay || 0) * 30).toLocaleString()}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={dealPriceLoading}
+                  className="py-2.5 px-5 bg-forest-850 hover:bg-forest-900 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {dealPriceLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Deal Rate to Database</span>
                     </>
                   )}
                 </button>

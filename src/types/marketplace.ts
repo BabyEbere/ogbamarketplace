@@ -55,6 +55,7 @@ export interface Product {
   id: string;
   vendorId: string;
   vendorName: string;
+  vendorSlug?: string;
   vendorLocation: string;
   vendorVerified: boolean;
   title: string;

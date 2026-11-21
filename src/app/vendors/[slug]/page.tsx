@@ -34,12 +34,12 @@ export async function generateMetadata({ params }: VendorPageProps): Promise<Met
     title: `${vendor.businessName} - Official Store | OGBA MARKET PLACE`,
     description: `Shop genuine products directly from verified merchant ${vendor.businessName} located in ${vendor.marketLocation}. Fast same-day local delivery across Omoku & Egi.`,
     alternates: {
-      canonical: `https://ogbamarketplace.com/vendors/${vendor.slug || vendor.id}`,
+      canonical: `https://ogbamarketplace.com.ng/vendors/${vendor.slug || vendor.id}`,
     },
     openGraph: {
       title: `${vendor.businessName} - Store & Inventory | OGBA MARKET PLACE`,
       description: `Browse verified stocks from ${vendor.businessName} in Omoku & Egi.`,
-      url: `https://ogbamarketplace.com/vendors/${vendor.slug || vendor.id}`,
+      url: `https://ogbamarketplace.com.ng/vendors/${vendor.slug || vendor.id}`,
       siteName: 'OGBA MARKET PLACE',
       locale: 'en_NG',
       type: 'website',
@@ -62,7 +62,7 @@ export default async function VendorStorePage({ params }: VendorPageProps) {
     '@type': 'Store',
     name: vendor.businessName,
     description: `Official store of ${vendor.businessName} on OGBA MARKET PLACE in ${vendor.marketLocation}`,
-    url: `https://ogbamarketplace.com/vendors/${vendor.slug || vendor.id}`,
+    url: `https://ogbamarketplace.com.ng/vendors/${vendor.slug || vendor.id}`,
     address: {
       '@type': 'PostalAddress',
       addressLocality: vendor.marketLocation,
@@ -84,19 +84,19 @@ export default async function VendorStorePage({ params }: VendorPageProps) {
         '@type': 'ListItem',
         position: 1,
         name: 'Home',
-        item: 'https://ogbamarketplace.com/',
+        item: 'https://ogbamarketplace.com.ng/',
       },
       {
         '@type': 'ListItem',
         position: 2,
         name: 'Merchants',
-        item: 'https://ogbamarketplace.com/#vendors',
+        item: 'https://ogbamarketplace.com.ng/#vendors',
       },
       {
         '@type': 'ListItem',
         position: 3,
         name: vendor.businessName,
-        item: `https://ogbamarketplace.com/vendors/${vendor.slug || vendor.id}`,
+        item: `https://ogbamarketplace.com.ng/vendors/${vendor.slug || vendor.id}`,
       },
     ],
   };

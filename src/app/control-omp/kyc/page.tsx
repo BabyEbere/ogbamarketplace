@@ -62,13 +62,14 @@ export default function AdminKycPage() {
     const matchesSearch =
       v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.phone.includes(searchTerm) ||
       v.location.toLowerCase().includes(searchTerm.toLowerCase());
 
     if (!matchesSearch) return false;
 
     if (filterTab === 'pending') {
-      return v.kycStatus === 'pending' || !v.isApprovedToSell;
+      return v.kycStatus === 'pending' || v.kycStatus === 'unsubmitted' || !v.isApprovedToSell || !v.isVerified;
     }
     if (filterTab === 'approved') {
       return v.isApprovedToSell;
@@ -268,7 +269,7 @@ export default function AdminKycPage() {
             <button
               onClick={loadData}
               className="p-2 bg-white border border-slate-200 text-slate-600 hover:text-forest-850 rounded-xl transition-colors"
-              title="Refresh from DB"
+              title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -278,8 +279,8 @@ export default function AdminKycPage() {
         {/* Vendors KYC Submissions List */}
         <div className="space-y-3">
           {loading ? (
-            <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-xs text-slate-400">
-              Loading merchant applications from Supabase database...
+            <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-xs text-slate-400 font-semibold">
+              Loading merchant applications...
             </div>
           ) : filteredVendors.length === 0 ? (
             <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 space-y-2">
